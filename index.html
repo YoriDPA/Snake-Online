@@ -4,114 +4,334 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snake Online - por Yoridpa</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        /* Estilos personalizados para o jogo */
         body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Evita barras de rolagem */
+        }
+        /* Garante que o canvas não estoure a tela em modo tela cheia */
+        canvas:fullscreen {
+            width: 100%;
+            height: 100%;
+        }
+        /* Estilo para os botões de controle mobile */
+        .touch-controls button {
+            width: 60px;
+            height: 60px;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-        }
-        canvas {
-            border: 2px solid #000;
-            background-color: #fff;
-        }
-        #score {
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
             font-size: 24px;
-            margin: 10px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s ease-in-out;
+        }
+        .touch-controls button:active {
+            transform: scale(0.95);
+            background-color: rgba(255, 255, 255, 0.3);
         }
     </style>
 </head>
-<body>
-    <div id="score">Pontuação: 0</div>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="text-center mb-4">
+        <h1 class="text-4xl font-bold text-emerald-400">Snake Online</h1>
+        <p class="text-gray-400">Criado por Yoridpa</p>
+    </div>
+
+    <div id="score" class="text-2xl font-medium mb-4">Pontuação: 0</div>
+    
+    <div class="relative">
+        <canvas id="gameCanvas" class="bg-gray-800 rounded-lg shadow-2xl"></canvas>
+        
+        <!-- Modal de Fim de Jogo -->
+        <div id="gameOverModal" class="absolute inset-0 bg-black bg-opacity-70 flex-col items-center justify-center rounded-lg hidden">
+            <h2 class="text-4xl font-bold text-red-500 mb-2">Fim de Jogo!</h2>
+            <p id="finalScore" class="text-xl mb-6">Sua pontuação: 0</p>
+            <button id="restartBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300">
+                Jogar Novamente
+            </button>
+        </div>
+    </div>
+
+    <div class="mt-4 flex space-x-4">
+         <button id="fullscreen-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Tela Cheia</button>
+    </div>
+
+    <!-- Controles de Toque para Mobile -->
+    <div class="touch-controls mt-6 grid grid-cols-3 gap-2 w-48 md:hidden">
+        <div></div>
+        <button id="up-btn">▲</button>
+        <div></div>
+        <button id="left-btn">◄</button>
+        <button id="down-btn">▼</button>
+        <button id="right-btn">►</button>
+    </div>
+
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreDisplay = document.getElementById('score');
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Elementos do DOM ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const scoreDisplay = document.getElementById('score');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const gameOverModal = document.getElementById('gameOverModal');
+            const finalScoreDisplay = document.getElementById('finalScore');
+            const restartBtn = document.getElementById('restartBtn');
 
-        const gridSize = 20;
-        const tileCount = canvas.width / gridSize;
-        let snake = [{ x: 10, y: 10 }];
-        let food = { x: 15, y: 15 };
-        let dx = 0;
-        let dy = 0;
-        let score = 0;
-        let gameLoop;
+            // --- Configurações do Jogo ---
+            const gridSize = 20;
+            let tileCount;
+            let snake, food, dx, dy, score, gameLoop;
+            let changingDirection = false; // Previne inversão de direção rápida
 
-        document.addEventListener('keydown', (e) => {
-            switch (e.key) {
-                case 'ArrowUp':
-                    if (dy !== 1) { dx = 0; dy = -1; }
-                    break;
-                case 'ArrowDown':
-                    if (dy !== -1) { dx = 0; dy = 1; }
-                    break;
-                case 'ArrowLeft':
-                    if (dx !== 1) { dx = -1; dy = 0; }
-                    break;
-                case 'ArrowRight':
-                    if (dx !== -1) { dx = 1; dy = 0; }
-                    break;
+            // --- Funções do Jogo ---
+
+            // Redimensiona o canvas e reinicia o jogo
+            function resizeCanvas() {
+                const availableWidth = window.innerWidth * 0.9;
+                const availableHeight = window.innerHeight * 0.7;
+                const size = Math.min(availableWidth, availableHeight);
+                
+                // Garante que o tamanho do canvas é múltiplo do tamanho da grade
+                canvas.width = Math.floor(size / gridSize) * gridSize;
+                canvas.height = canvas.width;
+                
+                tileCount = canvas.width / gridSize;
+                initializeGame();
             }
-        });
 
-        function game() {
-            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-            snake.unshift(head);
-
-            if (head.x === food.x && head.y === food.y) {
-                score += 1;
+            // Inicializa ou reinicia as variáveis do jogo
+            function initializeGame() {
+                snake = [{ x: Math.floor(tileCount / 2), y: Math.floor(tileCount / 2) }];
+                dx = 0;
+                dy = 0;
+                score = 0;
+                changingDirection = false; // CORREÇÃO: Reseta a trava de direção
                 scoreDisplay.textContent = `Pontuação: ${score}`;
+                gameOverModal.classList.add('hidden');
+                gameOverModal.classList.remove('flex');
+                
                 generateFood();
-            } else {
-                snake.pop();
+
+                if (gameLoop) clearInterval(gameLoop);
+                gameLoop = setInterval(gameTick, 120);
             }
 
-            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
-                gameOver();
-                return;
-            }
+            // O loop principal do jogo
+            function gameTick() {
+                if (dx === 0 && dy === 0) { // Não move se estiver parado
+                    draw();
+                    return;
+                }
 
-            for (let i = 1; i < snake.length; i++) {
-                if (head.x === snake[i].x && head.y === snake[i].y) {
+                changingDirection = false;
+                const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+                // Verifica colisões
+                if (hasWallCollision(head) || hasSelfCollision(head)) {
                     gameOver();
                     return;
                 }
-            }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#2ecc71';
-            snake.forEach(segment => {
-                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
-            });
-            ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
-        }
+                snake.unshift(head);
 
-        function generateFood() {
-            food.x = Math.floor(Math.random() * tileCount);
-            food.y = Math.floor(Math.random() * tileCount);
-            for (let segment of snake) {
-                if (food.x === segment.x && food.y === segment.y) {
+                // Verifica se comeu a comida
+                if (head.x === food.x && head.y === food.y) {
+                    score += 10;
+                    scoreDisplay.textContent = `Pontuação: ${score}`;
                     generateFood();
+                } else {
+                    snake.pop();
                 }
+
+                draw();
             }
-        }
 
-        function gameOver() {
-            clearInterval(gameLoop);
-            alert(`Fim de jogo! Sua pontuação: ${score}`);
-            snake = [{ x: 10, y: 10 }];
-            food = { x: 15, y: 15 };
-            dx = 0;
-            dy = 0;
-            score = 0;
-            scoreDisplay.textContent = `Pontuação: ${score}`;
-            gameLoop = setInterval(game, 100);
-        }
+            // Desenha tudo no canvas
+            function draw() {
+                // Fundo
+                ctx.fillStyle = '#1f2937'; // bg-gray-800
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        gameLoop = setInterval(game, 100);
+                // Comida (Maçã)
+                ctx.fillStyle = '#ef4444'; // bg-red-500
+                ctx.strokeStyle = '#f87171'; // bg-red-400
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+
+                // Cobra
+                snake.forEach((segment, index) => {
+                    // Gradiente para a cobra
+                    const gradient = ctx.createLinearGradient(
+                        segment.x * gridSize, segment.y * gridSize,
+                        segment.x * gridSize + gridSize, segment.y * gridSize + gridSize
+                    );
+                    gradient.addColorStop(0, '#34d399'); // emerald-400
+                    gradient.addColorStop(1, '#10b981'); // emerald-500
+                    ctx.fillStyle = gradient;
+                    
+                    // A cabeça é um círculo, o corpo são retângulos arredondados
+                    if (index === 0) {
+                        ctx.beginPath();
+                        ctx.arc(segment.x * gridSize + gridSize / 2, segment.y * gridSize + gridSize / 2, gridSize / 2, 0, 2 * Math.PI);
+                        ctx.fill();
+                    } else {
+                        ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize, gridSize);
+                    }
+                });
+            }
+
+            // Gera uma nova posição para a comida
+            function generateFood() {
+                let newFoodPosition;
+                do {
+                    newFoodPosition = {
+                        x: Math.floor(Math.random() * tileCount),
+                        y: Math.floor(Math.random() * tileCount)
+                    };
+                } while (isFoodOnSnake(newFoodPosition));
+                food = newFoodPosition;
+            }
+
+            function isFoodOnSnake(position) {
+                return snake.some(segment => segment.x === position.x && segment.y === position.y);
+            }
+
+            // Funções de verificação de colisão
+            function hasWallCollision(head) {
+                return head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
+            }
+
+            function hasSelfCollision(head) {
+                // Começa do segundo segmento (índice 1)
+                for (let i = 1; i < snake.length; i++) {
+                    if (head.x === snake[i].x && head.y === snake[i].y) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // Finaliza o jogo e mostra o modal
+            function gameOver() {
+                clearInterval(gameLoop);
+                finalScoreDisplay.textContent = `Sua pontuação: ${score}`;
+                gameOverModal.classList.remove('hidden');
+                gameOverModal.classList.add('flex');
+            }
+
+            // --- Event Listeners ---
+
+            // Controle pelo teclado
+            document.addEventListener('keydown', e => {
+                if (changingDirection) return;
+                changingDirection = true;
+
+                const goingUp = dy === -1;
+                const goingDown = dy === 1;
+                const goingLeft = dx === -1;
+                const goingRight = dx === 1;
+
+                switch (e.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                        if (!goingDown) { dx = 0; dy = -1; }
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        if (!goingUp) { dx = 0; dy = 1; }
+                        break;
+                    case 'ArrowLeft':
+                    case 'a':
+                        if (!goingRight) { dx = -1; dy = 0; }
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                        if (!goingLeft) { dx = 1; dy = 0; }
+                        break;
+                }
+            });
+
+            // Controles de toque (botões)
+            document.getElementById('up-btn').addEventListener('click', () => { if (dy !== 1) { dx = 0; dy = -1; } });
+            document.getElementById('down-btn').addEventListener('click', () => { if (dy !== -1) { dx = 0; dy = 1; } });
+            document.getElementById('left-btn').addEventListener('click', () => { if (dx !== 1) { dx = -1; dy = 0; } });
+            document.getElementById('right-btn').addEventListener('click', () => { if (dx !== -1) { dx = 1; dy = 0; } });
+
+
+            // Controle de toque (swipe)
+            let touchStartX = 0;
+            let touchStartY = 0;
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!touchStartX || !touchStartY) return;
+
+                const touchEndX = e.touches[0].clientX;
+                const touchEndY = e.touches[0].clientY;
+
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+
+                if (Math.abs(diffX) > Math.abs(diffY)) { // Movimento horizontal
+                    if (diffX > 0 && dx !== -1) { dx = 1; dy = 0; } // Direita
+                    else if (diffX < 0 && dx !== 1) { dx = -1; dy = 0; } // Esquerda
+                } else { // Movimento vertical
+                    if (diffY > 0 && dy !== -1) { dx = 0; dy = 1; } // Baixo
+                    else if (diffY < 0 && dy !== 1) { dx = 0; dy = -1; } // Cima
+                }
+
+                touchStartX = 0; // Reseta para evitar múltiplos movimentos com um swipe
+                touchStartY = 0;
+            }, { passive: false });
+
+
+            // Botão de reiniciar
+            restartBtn.addEventListener('click', initializeGame);
+
+            // Botão de tela cheia
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    canvas.requestFullscreen().catch(err => {
+                        alert(`Erro ao entrar em tela cheia: ${err.message} (${err.name})`);
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            
+            // Listener para quando a tela cheia muda (ex: pressionando ESC)
+            document.addEventListener('fullscreenchange', () => {
+                // Um pequeno atraso para garantir que as dimensões da janela foram atualizadas
+                setTimeout(resizeCanvas, 100); 
+            });
+
+
+            // --- Inicialização ---
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas(); // Chama na primeira carga
+        });
     </script>
 </body>
 </html>
+```
+Obrigado por reportar o problema! Se encontrar mais alguma coisa ou tiver outras ideias, me avi
