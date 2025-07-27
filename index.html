@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Online - por Yoridpa</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,9 +23,9 @@
             height: 100%;
         }
         /* Estilo para os botões de controle mobile */
-        .touch-controls button {
-            width: 72px; /* Aumentado para melhor toque */
-            height: 72px; /* Aumentado para melhor toque */
+        .touch-control-btn {
+            width: 64px;
+            height: 64px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -33,55 +33,60 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             color: white;
-            font-size: 32px; /* Aumentado para visibilidade */
+            font-size: 28px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: all 0.2s ease-in-out;
         }
-        .touch-controls button:active {
+        .touch-control-btn:active {
             transform: scale(0.95);
             background-color: rgba(255, 255, 255, 0.3);
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+<body class="bg-gray-900 text-white flex flex-col h-screen">
 
-    <div class="text-center mb-4">
-        <h1 class="text-4xl font-bold text-emerald-400">Snake Online</h1>
-        <p class="text-gray-400">Criado por Yoridpa</p>
-    </div>
+    <header class="text-center flex-shrink-0 pt-4 px-4">
+        <h1 class="text-3xl md:text-4xl font-bold text-emerald-400">Snake Online</h1>
+        <p class="text-sm text-gray-400">Criado por Yoridpa</p>
+        <div id="score" class="text-xl md:text-2xl font-medium mt-2">Pontuação: 0</div>
+    </header>
 
-    <div id="score" class="text-2xl font-medium mb-4">Pontuação: 0</div>
-    
-    <div class="relative">
-        <canvas id="gameCanvas" class="bg-gray-800 rounded-lg shadow-2xl"></canvas>
-        
-        <!-- Modal de Fim de Jogo -->
-        <div id="gameOverModal" class="absolute inset-0 bg-black bg-opacity-70 flex-col items-center justify-center rounded-lg hidden">
-            <h2 class="text-4xl font-bold text-red-500 mb-2">Fim de Jogo!</h2>
-            <p id="finalScore" class="text-xl mb-6">Sua pontuação: 0</p>
-            <button id="restartBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300">
-                Jogar Novamente
+    <main class="flex-grow flex items-center justify-center relative py-2">
+        <div class="relative w-full h-full flex items-center justify-center">
+            <canvas id="gameCanvas" class="bg-gray-800 rounded-lg shadow-2xl"></canvas>
+            
+            <!-- Modal de Fim de Jogo -->
+            <div id="gameOverModal" class="absolute inset-0 bg-black bg-opacity-70 flex-col items-center justify-center rounded-lg hidden">
+                <h2 class="text-4xl font-bold text-red-500 mb-2">Fim de Jogo!</h2>
+                <p id="finalScore" class="text-xl mb-6">Sua pontuação: 0</p>
+                <button id="restartBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300">
+                    Jogar Novamente
+                </button>
+            </div>
+
+            <!-- Botão de Tela Cheia Sobreposto -->
+            <button id="fullscreen-btn" class="absolute top-2 right-2 bg-gray-700/50 hover:bg-gray-600/70 p-2 rounded-full transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
             </button>
+
+            <!-- Controles de Toque Sobrepostos -->
+            <div class="absolute inset-0 md:hidden">
+                <div class="absolute bottom-5 left-5 flex gap-10 opacity-75">
+                    <button id="left-btn" class="touch-control-btn">◄</button>
+                    <button id="right-btn" class="touch-control-btn">►</button>
+                </div>
+                <div class="absolute bottom-5 right-5 flex flex-col gap-5 opacity-75">
+                    <button id="up-btn" class="touch-control-btn">▲</button>
+                    <button id="down-btn" class="touch-control-btn">▼</button>
+                </div>
+            </div>
         </div>
-    </div>
-
-    <div class="mt-4 flex space-x-4">
-         <button id="fullscreen-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Tela Cheia</button>
-    </div>
-
-    <!-- Controles de Toque para Mobile -->
-    <div class="touch-controls mt-8 grid grid-cols-3 gap-4 w-64 md:hidden">
-        <div></div>
-        <button id="up-btn">▲</button>
-        <div></div>
-        <button id="left-btn">◄</button>
-        <button id="down-btn">▼</button>
-        <button id="right-btn">►</button>
-    </div>
+    </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- Elementos do DOM ---
+            const mainElement = document.querySelector('main');
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
             const scoreDisplay = document.getElementById('score');
@@ -99,13 +104,18 @@
             // --- Funções do Jogo ---
 
             function resizeCanvas() {
-                const availableWidth = window.innerWidth * 0.9;
-                const availableHeight = window.innerHeight * 0.6; // Menor para dar espaço aos controles
-                const size = Math.min(availableWidth, availableHeight);
+                const availableWidth = mainElement.clientWidth;
+                const availableHeight = mainElement.clientHeight;
+                
+                const size = Math.min(availableWidth, availableHeight) * 0.98; // Usa 98% para uma pequena margem
                 
                 canvas.width = Math.floor(size / gridSize) * gridSize;
                 canvas.height = canvas.width;
                 
+                const modalContainer = gameOverModal.parentElement;
+                modalContainer.style.width = `${canvas.width}px`;
+                modalContainer.style.height = `${canvas.height}px`;
+
                 tileCount = canvas.width / gridSize;
                 initializeGame();
             }
@@ -123,7 +133,6 @@
                 generateFood();
 
                 if (gameLoop) clearInterval(gameLoop);
-                // MELHORIA: Velocidade reduzida para melhor jogabilidade mobile
                 gameLoop = setInterval(gameTick, 150); 
             }
 
@@ -136,7 +145,7 @@
                 changingDirection = false;
                 const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
-                if (hasWallCollision(head) || hasSelfCollision(head)) {
+                if (hasWallCollision(head)) {
                     gameOver();
                     return;
                 }
@@ -147,7 +156,6 @@
                     score += 10;
                     scoreDisplay.textContent = `Pontuação: ${score}`;
                     generateFood();
-                    // MELHORIA: Feedback tátil ao comer
                     triggerHapticFeedback(50); 
                 } else {
                     snake.pop();
@@ -156,7 +164,6 @@
                 draw();
             }
             
-            // MELHORIA: Função para feedback tátil (vibração)
             function triggerHapticFeedback(pattern) {
                 if (window.navigator && window.navigator.vibrate) {
                     window.navigator.vibrate(pattern);
@@ -213,21 +220,11 @@
                 return head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
             }
 
-            function hasSelfCollision(head) {
-                for (let i = 1; i < snake.length; i++) {
-                    if (head.x === snake[i].x && head.y === snake[i].y) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
             function gameOver() {
                 clearInterval(gameLoop);
                 finalScoreDisplay.textContent = `Sua pontuação: ${score}`;
                 gameOverModal.classList.remove('hidden');
                 gameOverModal.classList.add('flex');
-                // MELHORIA: Feedback tátil de fim de jogo
                 triggerHapticFeedback([200, 50, 100]); 
             }
 
@@ -297,7 +294,7 @@
             fullscreenBtn.addEventListener('click', () => {
                 if (!document.fullscreenElement) {
                     canvas.requestFullscreen().catch(err => {
-                        alert(`Erro ao entrar em tela cheia: ${err.message} (${err.name})`);
+                        // CORREÇÃO: O erro é ignorado silenciosamente para evitar a mensagem na consola.
                     });
                 } else {
                     document.exitFullscreen();
