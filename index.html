@@ -1,492 +1,6 @@
-<html lang="pt-BR"><head><script>(function(firebaseConfig, initialAuthToken, appId) {
-        window.__firebase_config = firebaseConfig;
-        window.__initial_auth_token = initialAuthToken;
-        window.__app_id = appId;
-            })("\n{\n  \"apiKey\": \"AIzaSyCqyCcs2R2e7AegGjvFAwG98wlamtbHvZY\",\n  \"authDomain\": \"bard-frontend.firebaseapp.com\",\n  \"projectId\": \"bard-frontend\",\n  \"storageBucket\": \"bard-frontend.firebasestorage.app\",\n  \"messagingSenderId\": \"175205271074\",\n  \"appId\": \"1:175205271074:web:2b7bd4d34d33bf38e6ec7b\"\n}\n","eyJhbGciOiJSUzI1NiIsImtpZCI6IjliNTYzZWFkZTM5OGI3ZWRjOTg2YThhYjM3YzNlMTY3ZjgyOGRhZGUiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJmaXJlYmFzZS1hZG1pbnNkay1mYnN2Y0BiYXJkLWZyb250ZW5kLmlhbS5nc2VydmljZWFjY291bnQuY29tIiwiYXVkIjoiaHR0cHM6XC9cL2lkZW50aXR5dG9vbGtpdC5nb29nbGVhcGlzLmNvbVwvZ29vZ2xlLmlkZW50aXR5LmlkZW50aXR5dG9vbGtpdC52MS5JZGVudGl0eVRvb2xraXQiLCJ1aWQiOiIxMjUzNDk0ODY3MDcwNTk2Njc5OSIsImlzcyI6ImZpcmViYXNlLWFkbWluc2RrLWZic3ZjQGJhcmQtZnJvbnRlbmQuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLCJjbGFpbXMiOnsiYXBwSWQiOiJjXzNmNTAzMGFmZjdlOTIxM2Zfc25ha2VfZ2FtZV92OF93b3JraW5nLTUzMSJ9LCJleHAiOjE3NTM3NDAzMTIsImlhdCI6MTc1MzczNjcxMiwiYWxnIjoiUlMyNTYifQ.feYM8tXP0kpAnlzmO4iAj4J6408iEcL8anuIlSqVi1VHvkm9dRXZrdWGEAbxj8J7HeFWShK-u_jm-FkuVrI5UJvTWqdxnyzk1mHoeVHuX5ZIUI2MHylW1cga1wxhHl92DG_xquWu7HXIqEA22HYb4FmW5AGlvZraIyuNCThlW6L5F-v_hxWNrA8PhAj2bpWa0n8JM6mOm8Q7OoUcwhv9Py5aNyJZ7FoFJo1kmpi2NdKIr95S9b4b1J8PUyCnVIG8MRDupemkOgCAZuemUx4h0seOrwdb7gy1ONSzltOzB1watVW08q5NQ4qNJ7WRJplFOLtrxqJuMrPLV8_NZklprw","c_3f5030aff7e9213f_snake_game_v8_working-531")</script><script>(function() {
-  // Ensure this script is executed only once
-  if (window.firebaseAuthBridgeScriptLoaded) {
-    return;
-  }
-  window.firebaseAuthBridgeScriptLoaded = true;
-
-  let nextTokenPromiseId = 0;
-
-  // Stores { resolve, reject } for ongoing token requests
-  const pendingTokenPromises = {};
-
-  // Listen for messages from the Host Application
-  window.addEventListener('message', function(event) {
-
-    const messageData = event.data;
-
-  if (messageData && messageData.type === 'RESOLVE_NEW_FIREBASE_TOKEN') {
-      const { success, token, error, promiseId } = messageData ?? {};
-      if (pendingTokenPromises[promiseId]) {
-        if (success) {
-          pendingTokenPromises[promiseId].resolve(token);
-        } else {
-          pendingTokenPromises[promiseId].reject(new Error(error || 'Token refresh failed from host.'));
-        }
-        delete pendingTokenPromises[promiseId];
-      }
-    }
-  });
-
-  // Expose a function for the Generated App to request a new Firebase token
-  window.requestNewFirebaseToken = function() {
-    const currentPromiseId = nextTokenPromiseId++;
-    const promise = new Promise((resolve, reject) => {
-      pendingTokenPromises[currentPromiseId] = { resolve, reject };
-    });
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({
-        type: 'REQUEST_NEW_FIREBASE_TOKEN',
-        promiseId: currentPromiseId
-      }, '*');
-    } else {
-      pendingTokenPromises[currentPromiseId].reject(new Error('No parent window to request token from.'));
-      delete pendingTokenPromises[currentPromiseId];
-    }
-    return promise;
-  };
-})();</script><script>
-let realOriginalGetUserMedia = null;
-if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-  realOriginalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-}
-
-(function() {
-  if (navigator.mediaDevices && navigator.mediaDevices.__proto__) {
-    try {
-      Object.defineProperty(navigator.mediaDevices.__proto__, 'getUserMedia', {
-        get: function() {
-          return undefined; // Or throw an error
-        },
-        configurable: false
-      });
-    } catch (error) {
-      console.error("Error defining prototype getter:", error);
-    }
-  }
-})();
-
-(function() {
-  const pendingMediaResolvers = {};
-  let nextMediaPromiseId = 0;
-
-  function requestMediaPermissions(constraints) {
-    const mediaPromiseId = nextMediaPromiseId++;
-    const promise = new Promise((resolve, reject) => {
-      pendingMediaResolvers[mediaPromiseId] = (granted) => {
-        delete pendingMediaResolvers[mediaPromiseId];
-        resolve(granted);
-      };
-    });
-
-    window.parent.postMessage({
-      type: 'requestMediaPermission',
-      constraints: constraints,
-      promiseId: mediaPromiseId,
-    }, '*');
-
-    return promise;
-  }
-
-  let originalGetUserMedia = realOriginalGetUserMedia;
-
-  function interceptGetUserMedia() {
-    if (navigator.mediaDevices) {
-      Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-        value: function(constraints) {
-          return requestMediaPermissions(constraints).then((granted) => {
-            if (granted) {
-              if (originalGetUserMedia) {
-                return originalGetUserMedia(constraints);
-              } else {
-                throw new Error("Original getUserMedia not available.");
-              }
-            } else {
-              throw new DOMException('Permission denied', 'NotAllowedError');
-            }
-          });
-        },
-        writable: false,
-        configurable: false
-      });
-    }
-  }
-
-  interceptGetUserMedia();
-
-  const observer = new MutationObserver(function(mutationsList, observer) {
-    for (const mutation of mutationsList) {
-      if (mutation.type === 'reconfigured' && mutation.name === 'getUserMedia' && mutation.object === navigator.mediaDevices) {
-        interceptGetUserMedia();
-      } else if (mutation.type === 'attributes' && mutation.attributeName === 'getUserMedia' && mutation.target === navigator.mediaDevices) {
-        interceptGetUserMedia();
-      } else if (mutation.type === 'childList' && mutation.addedNodes) {
-        mutation.addedNodes.forEach(node => {
-          if (node === navigator.mediaDevices) {
-            interceptGetUserMedia();
-          }
-        });
-      }
-    }
-  });
-
-  function interceptSpeechRecognition() {
-    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-      return;
-    }
-
-    const OriginalSpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    const SpeechRecognitionWrapper = function(...args) {
-      const recognizer = new OriginalSpeechRecognition(...args);
-      const originalStart = recognizer.start.bind(recognizer);
-
-      recognizer.start = function() {
-        requestMediaPermissions({ audio: true }).then(granted => {
-          if (granted) {
-            originalStart();
-          } else {
-            const errorEvent = new SpeechRecognitionErrorEvent('error');
-            errorEvent.error = 'not-allowed'; // This is the standard error for permission denial.
-            recognizer.dispatchEvent(errorEvent);
-          }
-        });
-      };
-
-      return recognizer;
-    };
-
-    SpeechRecognitionWrapper.prototype = OriginalSpeechRecognition.prototype;
-    SpeechRecognitionWrapper.prototype.constructor = SpeechRecognitionWrapper;
-
-    if (window.SpeechRecognition) {
-      window.SpeechRecognition = SpeechRecognitionWrapper;
-    }
-    if (window.webkitSpeechRecognition) {
-      window.webkitSpeechRecognition = SpeechRecognitionWrapper;
-    }
-  }
-
-  interceptSpeechRecognition();
-
-  window.addEventListener('message', function(event) {
-    if (event.data) {
-      if (event.data.type === 'resolveMediaPermission') {
-        const { promiseId, granted } = event.data;
-        if (pendingMediaResolvers[promiseId]) {
-          pendingMediaResolvers[promiseId](granted);
-        }
-      }
-    }
-  });
-
-})();</script><script>((function(modelInformation) {
-  const originalFetch = window.fetch;
-  // TODO: b/421908508 - Move these out of the script and match all generative AI model calls.
-  let googleLlmBaseApiUrls = [
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.textModelName + ':streamGenerateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.textModelName + ':generateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.imageModelName + ':predict',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.imageModelName + ':predictLongRunning',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.imageEditModelName + ':generateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.videoModelName + ':predict',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.videoModelName + ':predictLongRunning',
-    'https://generativelanguage.googleapis.com/v1beta/models/' + modelInformation.ttsModelName + ':generateContent',
-  ];
-  modelInformation.deprecatedTextModelNames.forEach((modelName) => {
-    googleLlmBaseApiUrls.push(
-      'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':streamGenerateContent',
-      'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent',
-    );
-  });
-
-  const pendingFetchResolvers = {};
-  let nextPromiseId = 0;
-
-  function handleStringInput(input, optionsArgument) {
-    const actualUrl = input;
-    const fetchCallArgs = [actualUrl, optionsArgument];
-    const effectiveOptions = optionsArgument || {};
-    const bodyForApiKeyCheck = effectiveOptions.body;
-    const bodyForPostMessage = effectiveOptions.body;
-    return { actualUrl, fetchCallArgs, effectiveOptions, bodyForApiKeyCheck, bodyForPostMessage };
-  }
-
-  function handleRequestInput(input, optionsArgument) {
-    const actualUrl = input.url;
-    const fetchCallArgs = [input, optionsArgument];
-    const effectiveOptions = { method: input.method, headers: new Headers(input.headers) };
-    let bodyForApiKeyCheck;
-    let bodyForPostMessage;
-
-    if (optionsArgument) {
-      if (optionsArgument.method) effectiveOptions.method = optionsArgument.method;
-      if (optionsArgument.headers) effectiveOptions.headers = new Headers(optionsArgument.headers);
-      if ('body' in optionsArgument) {
-        bodyForApiKeyCheck = optionsArgument.body;
-        bodyForPostMessage = optionsArgument.body;
-      } else {
-        bodyForApiKeyCheck = undefined;
-        bodyForPostMessage = input.body;
-      }
-    } else {
-      bodyForApiKeyCheck = undefined;
-      bodyForPostMessage = input.body;
-    }
-    return { actualUrl, fetchCallArgs, effectiveOptions, bodyForApiKeyCheck, bodyForPostMessage };
-  }
-
-  window.fetch = function(input, optionsArgument) {
-    let actualUrl;
-    let fetchCallArgs;
-    let effectiveOptions = {};
-    let bodyForApiKeyCheck;
-    let bodyForPostMessage;
-
-    if (typeof input === 'string') {
-      ({actualUrl, fetchCallArgs, effectiveOptions, bodyForApiKeyCheck, bodyForPostMessage} = handleStringInput(input, optionsArgument));
-    } else if (input instanceof Request) {
-      ({actualUrl, fetchCallArgs, effectiveOptions, bodyForApiKeyCheck, bodyForPostMessage} = handleRequestInput(input, optionsArgument));
-    } else {
-      return originalFetch.apply(window, [input, optionsArgument]);
-    }
-
-    effectiveOptions.method = effectiveOptions.method || 'GET';
-    if (!effectiveOptions.headers) {
-      effectiveOptions.headers = new Headers();
-    }
-
-
-    if (typeof actualUrl === 'string' && googleLlmBaseApiUrls.some((url) => actualUrl.startsWith(url))) {
-      let apiKeyIsNull = true;
-
-      const regex = new RegExp("models/([^:]+)");
-      const modelNameMatch = actualUrl.match(regex);
-      const modelName = modelNameMatch ? modelNameMatch[1] : 'unspecified';
-
-
-      try {
-        const urlObject = new URL(actualUrl);  // Use URL object for robust parsing
-        const apiKeyParam = urlObject.searchParams.get('key');
-        if (apiKeyParam) {
-          apiKeyIsNull = false;
-        }
-      } catch (e) {
-        // Continue checks even if URL parsing fails
-      }
-
-      if (apiKeyIsNull && effectiveOptions.headers) {
-        const h = new Headers(effectiveOptions.headers);
-        const apiKeyHeaderValue = h.get('X-API-Key') || h.get('x-api-key');
-        if (apiKeyHeaderValue) {
-          apiKeyIsNull = false;
-          return originalFetch.apply(window, fetchCallArgs);
-        }
-      }
-
-      if (apiKeyIsNull && effectiveOptions.method && ['POST', 'PUT', 'PATCH'].includes(effectiveOptions.method.toUpperCase()) && typeof bodyForApiKeyCheck === 'string') {
-        try {
-          const bodyData = JSON.parse(bodyForApiKeyCheck);
-          if (bodyData && bodyData.apiKey) {
-            apiKeyIsNull = false;
-            return originalFetch.apply(window, fetchCallArgs);
-          }
-        } catch (e) {
-          // Ignore JSON parsing errors
-        }
-      }
-
-      if(apiKeyIsNull) {
-        const promiseId = nextPromiseId++;
-        const promise = new Promise((resolve) => {
-          pendingFetchResolvers[promiseId] = (resolvedResponse) => {
-            delete pendingFetchResolvers[promiseId];
-            resolve(resolvedResponse);
-          };
-        });
-
-        let serializedBodyForPostMessage;
-        if (typeof bodyForPostMessage === 'string' || bodyForPostMessage == null) {
-            serializedBodyForPostMessage = bodyForPostMessage;
-        } else if (bodyForPostMessage instanceof ReadableStream) {
-            serializedBodyForPostMessage = null;
-        } else {
-            try {
-                serializedBodyForPostMessage = JSON.stringify(bodyForPostMessage);
-            } catch (e) {
-                serializedBodyForPostMessage = null;
-            }
-        }
-
-        const messageOptions = {
-            method: effectiveOptions.method,
-            headers: Object.fromEntries(new Headers(effectiveOptions.headers).entries()),
-            body: serializedBodyForPostMessage
-        };
-
-        window.parent.postMessage({
-          type: 'requestFetch',
-          url: actualUrl,
-          modelName: modelName,
-          options: messageOptions,
-          promiseId: promiseId,
-        }, '*');
-
-        return promise;
-      }
-      return originalFetch.apply(window, fetchCallArgs);
-    }
-    return originalFetch.apply(window, fetchCallArgs);
-  };
-
-  window.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'resolveFetch') {
-      const { promiseId, response } = event.data;
-      if (pendingFetchResolvers[promiseId]) {
-        try {
-          const reconstructedResponse = new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: new Headers(response.headers),
-          });
-          pendingFetchResolvers[promiseId](reconstructedResponse);
-        } catch (error) {
-          pendingFetchResolvers[promiseId](new Response(null, { status: 500, statusText: "Interceptor Response Reconstruction Error" }));
-        }
-      }
-    }
-  });
-
-}))({"textModelName":"gemini-2.5-flash-preview-05-20","imageModelName":"imagen-3.0-generate-002","imageEditModelName":"gemini-2.0-flash-preview-image-generation","videoModelName":"veo-2.0-generate-001","ttsModelName":"gemini-2.5-flash-preview-tts","deprecatedTextModelNames":["gemini-2.0-flash","gemini-2.5-flash-preview-04-17"]})</script><script>(function() {
-  const originalConsoleLog = console.log;
-  const originalConsoleError = console.error;
-
-    /**
-   * Normalizes an error event or a promise rejection reason into a structured error object.
-   * @param {*} errorEventOrReason The error object or reason.
-   * @return {object} Structured error data { message, name, stack }.
-   */
-  function getErrorObject(errorEventOrReason) {
-    if (errorEventOrReason instanceof Error) {
-      return {
-        message: errorEventOrReason.message,
-        name: errorEventOrReason.name,
-        stack: errorEventOrReason.stack,
-      };
-    }
-    // Fallback for non-Error objects.
-    try {
-      return {
-        message: JSON.stringify(errorEventOrReason),
-        name: 'UnknownErrorType',
-        stack: null,
-      };
-    } catch (e) {
-      return {
-        message: String(errorEventOrReason),
-        name: 'UnknownErrorTypeNonStringifiable',
-        stack: null,
-      };
-    }
-  }
-
-  /**
-   * Converts an array of arguments (from log/error) into a single string.
-   * Handles Error objects specially to include their message and stack.
-   * @param {Array<*>} args - Arguments passed to console methods.
-   * @return {string} A string representation of the arguments.
-   */
-  function stringifyArgs(args) {
-    return args
-      .map((arg) => {
-        if (arg instanceof Error) {
-          const {message, stack} = arg;
-          return `Error: ${message}${stack ? ('\nStack: ' + stack) : ''}`;
-        }
-        if (typeof arg === 'object' && arg !== null) {
-          try {
-            return JSON.stringify(arg);
-          } catch (error) {
-            return '[Circular Object]';
-          }
-        } else {
-          return String(arg);
-        }
-      })
-      .join(' ');
-  }
-
-  console.log = function(...args) {
-    const logString = stringifyArgs(args);
-    window.parent.postMessage({ type: 'log', message: logString }, '*');
-    originalConsoleLog.apply(console, args);
-  };
-
-  console.error = function(...args) {
-    let errorData;
-    if (args.length > 0 && args[0] instanceof Error) {
-      const err = args[0];
-      // If the first arg is an Error, capture its details.
-      errorData = {
-        type: 'error',
-        source: 'CONSOLE_ERROR',
-        ...getErrorObject(err),
-        rawArgsString: stringifyArgs(args.slice(1)),
-        timestamp: new Date().toISOString(),
-      };
-    } else {
-      // If not an Error object, treat all args as a general error message.
-      errorData = {
-        type: 'error',
-        source: 'CONSOLE_ERROR',
-        message: stringifyArgs(args),
-        name: 'ConsoleLoggedError',
-        stack: null,
-        timestamp: new Date().toISOString(),
-      };
-    }
-    window.parent.postMessage(errorData, '*');
-    originalConsoleError.apply(console, args);
-  };
-
-  // Listen for global unhandled synchronous errors.
-  window.addEventListener('error', function(event) {
-    const errorDetails = event.error ? getErrorObject(event.error) : {
-      message: event.message,
-      name: 'GlobalError',
-      stack: null,
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    };
-
-    window.parent.postMessage({
-      type: 'error',
-      source: 'global',
-      ...errorDetails,
-      message: errorDetails.message || event.message,
-      timestamp: new Date().toISOString(),
-    }, '*');
-  });
-
-  // Listen for unhandled promise rejections (asynchronous errors).
-  window.addEventListener('unhandledrejection', function(event) {
-    const errorDetails = getErrorObject(event.reason);
-
-    window.parent.postMessage({
-      type: 'error',
-      source: 'unhandledrejection',
-      ...errorDetails,
-      message: errorDetails.message || 'Unhandled Promise Rejection',
-      timestamp: new Date().toISOString(),
-    }, '*');
-  });
-
-})();</script>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Online - por Yoridpa</title>
@@ -499,6 +13,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             --color-primary-dark: #10b981;
             --color-accent: #f59e0b;
             --color-accent-light: #fcd34d;
+            --color-secondary: #38bdf8;
             --color-danger: #ef4444;
             --color-danger-light: #f87171;
             --color-text: #ffffff;
@@ -551,7 +66,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             font-size: 0.75rem; color: #d1d5db;
             padding: 0.25rem 0.75rem; border-radius: 0.375rem;
             border: none; cursor: pointer; transition: background-color 0.2s;
-            margin-top: 0.75rem;
+            margin-top: 0.25rem;
         }
         #copyCodeBtn:hover { background-color: var(--color-btn-copy-hover); }
         #copyCodeBtn.copied { background-color: var(--color-primary); }
@@ -583,59 +98,59 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         #sound-btn { top: 0.5rem; left: 0.5rem; }
         #fullscreen-btn { top: 0.5rem; right: 0.5rem; }
 
-        .touch-controls { display: none; }
-        @media (max-width: 768px) {
-            .touch-controls { display: block; }
-            .touch-control-btn {
-                width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;
-                background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 50%; color: white; font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .touch-control-btn:active { transform: scale(0.95); background-color: rgba(255, 255, 255, 0.3); }
-            #touch-left-right { position: absolute; bottom: 1rem; left: 1rem; display: flex; gap: 2.5rem; opacity: 0.8; }
-            #touch-up-down { position: absolute; bottom: 1rem; right: 1rem; display: flex; flex-direction: column; gap: 1.25rem; opacity: 0.8; }
+        .touch-control-btn {
+            width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;
+            background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; color: white; font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-
+        .touch-control-btn:active { transform: scale(0.95); background-color: rgba(255, 255, 255, 0.3); }
+        
+        /* *** MUDANÇA: Aumentei o valor de 'bottom' para subir os controles *** */
+        #touch-left-right { position: absolute; bottom: 4rem; left: 1rem; display: flex; gap: 2.5rem; opacity: 0.8; }
+        #touch-up-down { position: absolute; bottom: 4rem; right: 1rem; display: flex; flex-direction: column; gap: 1.25rem; opacity: 0.8; }
+        
         .hidden { display: none !important; }
         .new-highscore-animation { animation: pulse 1.5s infinite; }
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.05); opacity: 0.9; }
         }
+        #powerup-status { height: 1.5rem; margin-top: 0.5rem; font-size: 1.125rem; font-weight: bold; color: var(--color-secondary); transition: opacity 0.5s; }
     </style>
 </head>
 <body>
 
     <header>
         <h1>Snake Online</h1>
-        <p>Criado por Yoridpa</p>
+        <p>Criado por YoriDPA</p>
         <div class="score-container">
-            <div id="score">Pontuação: 20</div>
-            <div id="highScore" class="new-highscore-animation">Recorde: 20</div>
+            <div id="score">Pontuação: 0</div>
+            <div id="highScore">Recorde: 0</div>
         </div>
+        <div id="powerup-status" style="opacity: 0;"></div>
         <div>
             <button id="copyCodeBtn">Copiar Código</button>
         </div>
     </header>
 
     <main>
-        <div style="position: relative; width: 920px; height: 920px; display: flex; align-items: center; justify-content: center;">
-            <canvas id="gameCanvas" width="920" height="920"></canvas>
+        <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+            <canvas id="gameCanvas"></canvas>
             
-            <div id="gameOverModal" style="display: flex;">
-                <h2 id="gameOverTitle">Novo Recorde!</h2>
-                <p id="finalScore">Sua pontuação: 20</p>
-                <p id="highScoreModal">Recorde atual: 20</p>
+            <div id="gameOverModal">
+                <h2 id="gameOverTitle">Fim de Jogo!</h2>
+                <p id="finalScore">Sua pontuação: 0</p>
+                <p id="highScoreModal">Recorde atual: 0</p>
                 <button id="restartBtn">Jogar Novamente</button>
             </div>
 
             <button id="sound-btn" class="overlay-btn">
-                <svg id="sound-off-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M23 9l-6 6M17 9l6 6"></path></svg>
-                <svg id="sound-on-icon" class="" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 010 7.07"></path></svg>
+                <svg id="sound-off-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>
+                <svg id="sound-on-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
             </button>
 
             <button id="fullscreen-btn" class="overlay-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
             </button>
 
             <div class="touch-controls">
@@ -669,19 +184,31 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             const soundBtn = document.getElementById('sound-btn');
             const soundOnIcon = document.getElementById('sound-on-icon');
             const soundOffIcon = document.getElementById('sound-off-icon');
+            const powerupStatus = document.getElementById('powerup-status');
+            const touchControls = document.querySelector('.touch-controls');
 
-            // --- Configurações do Jogo (Simplificado) ---
+            // --- Configurações do Jogo ---
             const gridSize = 20;
             let tileCount;
             let snake, food, dx, dy, score, gameLoop;
             let changingDirection = false;
             let gameSpeed = 200;
+            let baseSpeed = 200;
             let highScore = 0;
+
+            // --- Configurações de Power-ups ---
+            let powerups = [];
+            let powerupTimer = null;
 
             // --- Configurações de Áudio (Nativo) ---
             let audioCtx;
             let audioInitialized = false;
             let isMuted = true;
+
+            const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (!isTouchDevice && touchControls) {
+                touchControls.style.display = 'none';
+            }
 
             function initAudio() {
                 if (audioInitialized) return;
@@ -719,9 +246,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const size = Math.min(availableWidth, availableHeight) * 0.95; 
                 canvas.width = Math.floor(size / gridSize) * gridSize;
                 canvas.height = canvas.width;
-                const modalContainer = gameOverModal.parentElement;
-                modalContainer.style.width = `${canvas.width}px`;
-                modalContainer.style.height = `${canvas.height}px`;
                 tileCount = canvas.width / gridSize;
                 initializeGame();
             }
@@ -729,17 +253,19 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             function initializeGame() {
                 snake = [{ x: Math.floor(tileCount / 2), y: Math.floor(tileCount / 2) }];
                 dx = 0; dy = 0; score = 0; 
-                gameSpeed = 200;
+                baseSpeed = 200;
+                setGameSpeed(baseSpeed);
                 changingDirection = false;
+                powerups = [];
+                if (powerupTimer) clearTimeout(powerupTimer);
+                powerupStatus.textContent = '';
+                powerupStatus.style.opacity = 0;
 
                 scoreDisplay.textContent = `Pontuação: ${score}`;
                 highScoreDisplay.classList.remove('new-highscore-animation');
                 gameOverModal.style.display = 'none';
                 
                 generateFood();
-
-                if (gameLoop) clearInterval(gameLoop);
-                gameLoop = setInterval(gameTick, gameSpeed); 
             }
 
             function gameTick() {
@@ -754,6 +280,8 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                     return;
                 }
 
+                checkPowerupCollision(head);
+
                 snake.unshift(head);
 
                 if (head.x === food.x && head.y === food.y) {
@@ -762,10 +290,12 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                     generateFood();
                     playSound(600, 'triangle', 0.1);
                     
-                    if (score > 0 && score % 50 === 0 && gameSpeed > 70) {
-                        gameSpeed -= 15;
-                        clearInterval(gameLoop);
-                        gameLoop = setInterval(gameTick, gameSpeed);
+                    if (score > 0 && score % 30 === 0) {
+                        generatePowerup();
+                    }
+                    if (score > 0 && score % 50 === 0 && baseSpeed > 70) {
+                        baseSpeed -= 15;
+                        setGameSpeed(baseSpeed);
                     }
 
                 } else {
@@ -775,33 +305,107 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             }
 
             function draw() {
-                // Fundo
                 ctx.fillStyle = '#1f2937';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // Comida
-                ctx.fillStyle = '#ef4444';
-                ctx.strokeStyle = '#f87171';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, 2 * Math.PI);
-                ctx.fill();
-                ctx.stroke();
+                if (food) {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.strokeStyle = '#f87171';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                }
 
-                // Cobra
-                snake.forEach((segment, index) => {
-                    const gradient = ctx.createLinearGradient(segment.x * gridSize, segment.y * gridSize, segment.x * gridSize + gridSize, segment.y * gridSize + gridSize);
-                    gradient.addColorStop(0, '#34d399');
-                    gradient.addColorStop(1, '#10b981');
-                    ctx.fillStyle = gradient;
-                    if (index === 0) {
-                        ctx.beginPath();
-                        ctx.arc(segment.x * gridSize + gridSize / 2, segment.y * gridSize + gridSize / 2, gridSize / 2, 0, 2 * Math.PI);
-                        ctx.fill();
-                    } else {
-                        ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+                powerups.forEach(p => {
+                    if (p.type === 'score_boost') {
+                        ctx.fillStyle = '#f59e0b';
+                        ctx.strokeStyle = '#fcd34d';
+                    } else if (p.type === 'slow_down') {
+                        ctx.fillStyle = '#38bdf8';
+                        ctx.strokeStyle = '#7dd3fc';
                     }
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(p.x * gridSize + gridSize / 2, p.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
                 });
+
+                if (snake) {
+                    snake.forEach((segment, index) => {
+                        const gradient = ctx.createLinearGradient(segment.x * gridSize, segment.y * gridSize, segment.x * gridSize + gridSize, segment.y * gridSize + gridSize);
+                        gradient.addColorStop(0, '#34d399');
+                        gradient.addColorStop(1, '#10b981');
+                        ctx.fillStyle = gradient;
+                        if (index === 0) {
+                            ctx.beginPath();
+                            ctx.arc(segment.x * gridSize + gridSize / 2, segment.y * gridSize + gridSize / 2, gridSize / 2, 0, 2 * Math.PI);
+                            ctx.fill();
+                        } else {
+                            ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+                        }
+                    });
+                }
+            }
+
+            function generatePowerup() {
+                if (powerups.length > 0) return;
+                const type = Math.random() > 0.5 ? 'score_boost' : 'slow_down';
+                let position;
+                do {
+                    position = {
+                        x: Math.floor(Math.random() * tileCount),
+                        y: Math.floor(Math.random() * tileCount)
+                    };
+                } while (isPositionOccupied(position));
+                powerups.push({ ...position, type });
+            }
+
+            function checkPowerupCollision(head) {
+                const powerupIndex = powerups.findIndex(p => p.x === head.x && p.y === head.y);
+                if (powerupIndex > -1) {
+                    applyPowerup(powerups[powerupIndex].type);
+                    powerups.splice(powerupIndex, 1);
+                }
+            }
+            
+            function applyPowerup(type) {
+                playSound(800, 'sine', 0.2);
+                if (type === 'score_boost') {
+                    score += 40;
+                    scoreDisplay.textContent = `Pontuação: ${score}`;
+                    powerupStatus.textContent = 'PONTOS EXTRA!';
+                } else if (type === 'slow_down') {
+                    setGameSpeed(baseSpeed + 60);
+                    powerupStatus.textContent = 'VELOCIDADE REDUZIDA!';
+                    if (powerupTimer) clearTimeout(powerupTimer);
+                    powerupTimer = setTimeout(() => {
+                        setGameSpeed(baseSpeed);
+                        powerupStatus.textContent = '';
+                        powerupStatus.style.opacity = 0;
+                    }, 5000);
+                }
+                powerupStatus.style.opacity = 1;
+                if (type === 'score_boost') {
+                    setTimeout(() => {
+                         powerupStatus.style.opacity = 0;
+                    }, 2000);
+                }
+            }
+
+            function setGameSpeed(newSpeed) {
+                gameSpeed = newSpeed;
+                if (gameLoop) clearInterval(gameLoop);
+                gameLoop = setInterval(gameTick, gameSpeed);
+            }
+
+            function isPositionOccupied(position) {
+                if (food && food.x === position.x && food.y === position.y) return true;
+                if (snake && snake.some(segment => segment.x === position.x && segment.y === position.y)) return true;
+                if (powerups.some(p => p.x === position.x && p.y === position.y)) return true;
+                return false;
             }
 
             function generateFood() {
@@ -810,10 +414,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                     newFoodPosition = { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) };
                 } while (isPositionOccupied(newFoodPosition));
                 food = newFoodPosition;
-            }
-
-            function isPositionOccupied(position) {
-                return snake.some(segment => segment.x === position.x && segment.y === position.y);
             }
 
             function hasWallCollision(head) {
@@ -950,6 +550,5 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             resizeCanvas();
         });
     </script>
-
-
-</body></html>
+</body>
+</html>
