@@ -113,21 +113,21 @@
             position: absolute;
             top: 20px;
             left: 10px; /* Lado superior esquerdo */
-            font-size: 0.8rem; /* Tamanho ainda menor para o score */
+            font-size: 0.6rem; /* Tamanho ainda menor para o score */
             color: #fff;
-            text-shadow: 0 0 3px #3fff3f, 0 0 6px #3fff3f; /* Sombra reduzida */
+            text-shadow: 0 0 2px #3fff3f, 0 0 4px #3fff3f; /* Sombra reduzida */
             opacity: 0.7; /* Transparência */
             pointer-events: none;
             transition: transform 0.3s ease, opacity 0.3s ease;
             background: rgba(0, 0, 0, 0.5); /* Fundo semi-transparente para legibilidade */
-            padding: 2px 4px; /* Padding ainda menor */
-            border-radius: 2px; /* Bordas mais sutis */
+            padding: 1px 3px; /* Padding ainda menor */
+            border-radius: 1px; /* Bordas mais sutis */
             z-index: 3; /* Garante que fique acima do canvas */
         }
         .score-display.update {
             transform: scale(1.2);
             opacity: 1; /* Opacidade maior ao atualizar */
-            text-shadow: 0 0 6px #ffcc00, 0 0 12px #ccff00;
+            text-shadow: 0 0 4px #ffcc00, 0 0 8px #ccff00;
         }
 
         .signature {
@@ -169,7 +169,7 @@
         .ranking-display {
             font-size: 1.2rem;
             color: #ffcc00;
-            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffcc00;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ccff00;
             margin-bottom: 20px;
         }
 
@@ -183,9 +183,9 @@
             padding: 0;
         }
         .sound-toggle i {
-            font-size: 1.2rem; /* Tamanho reduzido para o ícone de som */
+            font-size: 1rem; /* Tamanho reduzido para o ícone de som */
             color: #fff;
-            text-shadow: 0 0 3px #3fff3f, 0 0 6px #3fff3f; /* Sombra reduzida */
+            text-shadow: 0 0 2px #3fff3f, 0 0 4px #3fff3f; /* Sombra reduzida */
             transition: opacity 0.3s ease;
         }
         .sound-toggle i.muted {
@@ -333,6 +333,19 @@
             }
         }
 
+        // Função para corrigir a posição da comida e cobra no mobile
+        function adjustMobileBoundaries() {
+            const cols = getGridCols();
+            const rows = getGridRows();
+            if (food && (food.x >= cols || food.y >= rows)) {
+                placeFood(); // Reposiciona comida fora dos limites
+            }
+            if (snake && snake[0] && (snake[0].x >= cols || snake[0].y >= rows)) {
+                snake[0].x = Math.max(0, Math.min(cols - 1, snake[0].x));
+                snake[0].y = Math.max(0, Math.min(rows - 1, snake[0].y));
+            }
+        }
+
         // =================================================================
         // 2. LÓGICA DA GRELHA E DIMENSÕES
         // =================================================================
@@ -350,6 +363,7 @@
             gameCanvas.width = w;
             gameCanvas.height = h;
             drawBackgroundGrid();
+            adjustMobileBoundaries(); // Ajusta limites ao redimensionar
             console.log("Canvases resized:", w, h); // Depuração
         }
 
@@ -541,15 +555,15 @@
 
             do {
                 newFood = {
-                    x: Math.floor(Math.random() * numCols),
-                    y: Math.floor(Math.random() * numRows)
+                    x: Math.floor(Math.random() * (numCols - 1)), // Evita borda direita
+                    y: Math.floor(Math.random() * (numRows - 1))  // Evita borda inferior
                 };
                 attempts++;
             } while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) && attempts < maxAttempts);
 
             if (attempts >= maxAttempts) {
                 console.warn("Máximo de tentativas atingido, usando posição inválida");
-                newFood = { x: -1, y: -1, type: 'normal' };
+                newFood = { x: 0, y: 0, type: 'normal' }; // Posição segura
             }
 
             const rand = Math.random();
@@ -575,6 +589,7 @@
             }
             changingDirection = false;
             drawFrame();
+            adjustMobileBoundaries(); // Corrige posições em tempo real
         }
 
         function drawFrame() {
