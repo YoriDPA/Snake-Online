@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Online</title>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet"> <!-- Nova fonte futurista -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         html, body {
@@ -13,7 +13,7 @@
             padding: 0;
             overflow: hidden;
             background-color: #000;
-            font-family: 'Press Start 2P', cursive;
+            font-family: 'Orbitron', sans-serif; /* Alteração para fonte futurista global */
         }
 
         #game-container {
@@ -86,10 +86,6 @@
             color: #3fff3f;
             box-shadow: 0 0 25px #fff;
         }
-        .game-button:disabled {
-            background-color: #666;
-            cursor: not-allowed;
-        }
 
         .game-over-dialog, .pause-dialog {
             background-color: rgba(0, 0, 0, 0.85);
@@ -126,7 +122,7 @@
         .score-display.update {
             transform: scale(1.2);
             opacity: 1;
-            text-shadow: 0 0 10px #ffcc00, 0 0 20px #ffcc00;
+            text-shadow: 0 0 10px #ffcc00, 0 0 20px #ccff00;
         }
 
         .signature {
@@ -165,15 +161,11 @@
             100% { opacity: 0; }
         }
 
-        .audio-error {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: #ff4444;
-            font-size: 1rem;
-            text-shadow: 0 0 5px #ff4444;
-            z-index: 12;
-            pointer-events: none;
+        .ranking-display {
+            font-size: 1.2rem;
+            color: #ffcc00;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffcc00;
+            margin-bottom: 20px;
         }
     </style>
 </head>
@@ -185,17 +177,17 @@
         <div class="ui-overlay">
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
-                <p id="audioInstruction" style="color: #fff; font-size: 1rem;">Clique em 'Iniciar' para começar.</p>
+                <p class="ranking-display">High Score: <span id="startHighScore">0</span>s</p>
                 <button id="startButton" class="game-button">Iniciar</button>
             </div>
 
             <div id="gameOverScreen" class="game-over-content hidden">
                 <div class="game-over-dialog">
                     <h1>FIM DE JOGO</h1>
-                    <p>A sua pontuação final foi:</p>
-                    <p id="finalScore" class="final-score">0</p>
-                    <p>High Score: <span id="gameOverHighScore"></span></p>
+                    <p>Tempo final: <span id="finalScore"></span>s</p>
+                    <p>High Score: <span id="gameOverHighScore"></span>s</p>
                     <button id="restartButton" class="game-button">Jogar Novamente</button>
+                    <button id="backToMenuButton" class="game-button">Voltar ao Menu</button>
                 </div>
             </div>
 
@@ -209,7 +201,7 @@
             <div id="signature" class="signature">by Yori DPA</div>
         </div>
 
-        <div id="scoreDisplay" class="score-display hidden">Pontos: 0 (High: 0)</div>
+        <div id="scoreDisplay" class="score-display hidden">Tempo: 0s (High: 0s)</div>
         <div id="powerUpMessage" class="powerup-message hidden"></div>
         <div id="audioError" class="audio-error hidden">Erro: Sons não carregados. Verifique os arquivos!</div>
 
@@ -248,13 +240,14 @@
         const startButton = document.getElementById('startButton');
         const restartButton = document.getElementById('restartButton');
         const resumeButton = document.getElementById('resumeButton');
+        const backToMenuButton = document.getElementById('backToMenuButton');
         const scoreDisplay = document.getElementById('scoreDisplay');
         const finalScoreDisplay = document.getElementById('finalScore');
         const gameOverHighScoreDisplay = document.getElementById('gameOverHighScore');
+        const startHighScoreDisplay = document.getElementById('startHighScore');
         const signature = document.getElementById('signature');
         const powerUpMessage = document.getElementById('powerUpMessage');
         const audioError = document.getElementById('audioError');
-        const audioInstruction = document.getElementById('audioInstruction');
 
         const eatSound = document.getElementById('eatSound');
         const gameOverSound = document.getElementById('gameOverSound');
@@ -276,7 +269,7 @@
         });
 
         const gridSize = 20;
-        let snake, food, direction, score, speed, gameInterval, changingDirection, highScore;
+        let snake, food, direction, score, speed, gameInterval, changingDirection, highScore, startTime;
         let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
         let demoSnake, demoDirection, animationFrameId;
         let isPaused = false;
@@ -292,10 +285,12 @@
         }
 
         // Salva high score no localStorage
-        function saveHighScore() {
-            if (score > highScore) {
-                highScore = score;
+        function saveHighScore(newScore) {
+            if (newScore > highScore) {
+                highScore = newScore;
                 localStorage.setItem('snakeHighScore', highScore);
+                startHighScoreDisplay.textContent = `${highScore}`; // Atualiza na tela inicial
+                gameOverHighScoreDisplay.textContent = `${highScore}`; // Atualiza na tela de game over
             }
         }
 
@@ -489,15 +484,16 @@
             const numRows = getGridRows();
             snake = [{ x: Math.floor(numCols / 2), y: Math.floor(numRows / 2) }];
             placeFood();
-            direction = 'right';
-            score = 0;
+            direction = null; // Inicializa sem direção, cobra parada
+            score = 0; // Score fixo
             highScore = loadHighScore();
             speed = 150;
+            startTime = Date.now(); // Inicia o tempo
             changingDirection = false;
             isPaused = false;
             slowdownActive = false;
             speedupActive = false;
-            scoreDisplay.textContent = `Pontos: ${score} (High: ${highScore})`;
+            scoreDisplay.textContent = `Tempo: 0s (High: ${highScore}s)`;
             powerUpMessage.classList.add('hidden');
             if (!snake || !food || food.x < 0 || food.y < 0) {
                 console.error("Erro: snake ou food não inicializados corretamente:", { snake, food });
@@ -541,13 +537,14 @@
         }
 
         function gameLoop() {
-            if (isPaused) return;
+            if (isPaused || !direction) return; // Cobra só se move após o primeiro comando
             moveSnake();
             if (isGameOver()) {
                 stopGame();
                 return;
             }
             changingDirection = false;
+            updateScoreDisplay(); // Atualiza o tempo em tempo real
             drawFrame();
         }
 
@@ -582,10 +579,8 @@
             }
             snake.unshift(head);
             if (head.x === food.x && head.y === food.y) {
-                let points = 1;
-                let sound = eatSound;
+                let sound = eatSound; // Som para interação com comida
                 if (food.type === 'bonus') {
-                    points = 5;
                     showPowerUpMessage('bonus');
                     sound = powerUpSound;
                 } else if (food.type === 'slowdown') {
@@ -621,17 +616,11 @@
                         }, 10000);
                     }
                 } else {
+                    // Comida normal não incrementa score, apenas afeta velocidade
                     speed = Math.max(50, speed - 2);
                     clearInterval(gameInterval);
                     gameInterval = setInterval(gameLoop, speed);
                 }
-                score += points;
-                saveHighScore(); // Atualiza high score se necessário
-                scoreDisplay.textContent = `Pontos: ${score} (High: ${highScore})`;
-                scoreDisplay.classList.add('update');
-                setTimeout(() => {
-                    scoreDisplay.classList.remove('update');
-                }, 300);
                 if (sound) {
                     sound.currentTime = 0;
                     sound.play().catch(e => console.error(`Erro ao tocar ${sound.id}:`, e));
@@ -642,11 +631,31 @@
             }
         }
 
+        // Nova função para atualizar o display com o tempo
+        function updateScoreDisplay() {
+            if (startTime) {
+                const currentTime = Math.floor((Date.now() - startTime) / 1000); // Tempo em segundos
+                scoreDisplay.textContent = `Tempo: ${currentTime}s (High: ${highScore}s)`;
+                if (currentTime > highScore) {
+                    scoreDisplay.classList.add('update');
+                    setTimeout(() => {
+                        scoreDisplay.classList.remove('update');
+                    }, 300);
+                }
+            }
+        }
+
         // =================================================================
         // 5. GESTÃO DE EVENTOS E CONTROLOS
         // =================================================================
         function setDirection(newDirection) {
             if (changingDirection) return;
+            if (!direction) { // Primeiro comando ativa o movimento
+                direction = newDirection;
+                if (gameInterval) clearInterval(gameInterval); // Garante um novo intervalo
+                gameInterval = setInterval(gameLoop, speed);
+                console.log("First command received, movement started:", newDirection);
+            }
             const goingUp = direction === 'up', goingDown = direction === 'down';
             const goingLeft = direction === 'left', goingRight = direction === 'right';
 
@@ -724,14 +733,13 @@
             pauseScreen.classList.add('hidden');
             scoreDisplay.classList.remove('hidden');
             powerUpMessage.classList.add('hidden');
-            audioInstruction.classList.add('hidden');
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
 
             initializeGame();
             addEventListeners();
             if (gameInterval) clearInterval(gameInterval); // Garante que não haja intervalos duplicados
-            gameInterval = setInterval(gameLoop, speed);
-            console.log("Game loop started:", { snake, food, speed }); // Depuração
+            gameInterval = setInterval(gameLoop, speed); // Inicia o loop, mas cobra só se move com comando
+            console.log("Game loop started:", { snake, food, speed, direction }); // Depuração
         }
 
         function stopGame() {
@@ -740,9 +748,10 @@
             gameOverScreen.classList.remove('hidden');
             scoreDisplay.classList.add('hidden');
             powerUpMessage.classList.add('hidden');
-            finalScoreDisplay.textContent = score;
+            const gameTime = Math.floor((Date.now() - startTime) / 1000); // Tempo total em segundos
+            finalScoreDisplay.textContent = gameTime;
+            saveHighScore(gameTime); // Salva o tempo como high score
             gameOverHighScoreDisplay.textContent = highScore;
-            saveHighScore();
             gameOverSound.currentTime = 0;
             gameOverSound.play().catch(e => console.error("Erro ao tocar som de game over:", e));
         }
@@ -753,6 +762,13 @@
         startButton.addEventListener('click', runGame);
         restartButton.addEventListener('click', runGame);
         resumeButton.addEventListener('click', togglePause);
+        backToMenuButton.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            scoreDisplay.classList.add('hidden');
+            powerUpMessage.classList.add('hidden');
+            audioError.classList.add('hidden');
+        }); // Evento para voltar ao menu
         window.addEventListener('resize', resizeAllCanvases);
 
         initializeBackgroundAnimation();
