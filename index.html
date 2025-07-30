@@ -7,7 +7,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Estilos Gerais */
         html, body {
             height: 100%;
             margin: 0;
@@ -114,8 +113,17 @@
             left: 20px;
             font-size: 1.5rem;
             color: #fff;
-            text-shadow: 2px 2px 8px #000;
+            text-shadow: 0 0 5px #3fff3f, 0 0 10px #3fff3f;
+            opacity: 0.8;
+            pointer-events: none;
+            transition: transform 0.3s ease, opacity 0.3s ease;
         }
+        .score-display.update {
+            transform: scale(1.2);
+            opacity: 1;
+            text-shadow: 0 0 10px #ffcc00, 0 0 20px #ffcc00;
+        }
+
         .signature {
             position: absolute;
             bottom: 15px;
@@ -124,6 +132,44 @@
             color: rgba(255, 255, 255, 0.4);
             z-index: 11;
             pointer-events: all;
+        }
+
+        .powerup-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+            pointer-events: none;
+            animation: fadeOut 3s ease forwards;
+            z-index: 9;
+        }
+        .powerup-message.bonus {
+            color: #ffcc00;
+        }
+        .powerup-message.slowdown {
+            color: #00bfff;
+        }
+        .powerup-message.speedup {
+            color: #ff4500;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Novo: Mensagem de erro de áudio */
+        .audio-error {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #ff4444;
+            font-size: 1rem;
+            text-shadow: 0 0 5px #ff4444;
+            z-index: 12;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -135,6 +181,7 @@
         <div class="ui-overlay">
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
+                <p id="audioInstruction" style="color: #fff; font-size: 1rem;">Clique em "Iniciar" para desbloquear o áudio.</p>
                 <button id="startButton" class="game-button">Iniciar</button>
             </div>
 
@@ -143,11 +190,11 @@
                     <h1>FIM DE JOGO</h1>
                     <p>A sua pontuação final foi:</p>
                     <p id="finalScore" class="final-score">0</p>
+                    <p>High Score: <span id="gameOverHighScore"></span></p>
                     <button id="restartButton" class="game-button">Jogar Novamente</button>
                 </div>
             </div>
 
-            <!-- Novo diálogo de pausa -->
             <div id="pauseScreen" class="pause-screen-content hidden">
                 <div class="pause-dialog">
                     <h1>PAUSADO</h1>
@@ -158,7 +205,27 @@
             <div id="signature" class="signature">by Yori DPA</div>
         </div>
 
-        <div id="scoreDisplay" class="score-display hidden">Pontos: 0</div>
+        <div id="scoreDisplay" class="score-display hidden">Pontos: 0 (High: 0)</div>
+        <div id="powerUpMessage" class="powerup-message hidden"></div>
+        <div id="audioError" class="audio-error hidden">Erro: Sons não carregados. Verifique os arquivos!</div>
+
+        <!-- Áudios com múltiplos formatos -->
+        <audio id="eatSound">
+            <source src="eat.mp3" type="audio/mp3">
+            <source src="eat.ogg" type="audio/ogg">
+        </audio>
+        <audio id="gameOverSound">
+            <source src="gameover.mp3" type="audio/mp3">
+            <source src="gameover.ogg" type="audio/ogg">
+        </audio>
+        <audio id="pauseSound">
+            <source src="pause.mp3" type="audio/mp3">
+            <source src="pause.ogg" type="audio/ogg">
+        </audio>
+        <audio id="powerUpSound">
+            <source src="powerup.mp3" type="audio/mp3">
+            <source src="powerup.ogg" type="audio/ogg">
+        </audio>
     </div>
 
     <script>
@@ -179,14 +246,54 @@
         const resumeButton = document.getElementById('resumeButton');
         const scoreDisplay = document.getElementById('scoreDisplay');
         const finalScoreDisplay = document.getElementById('finalScore');
+        const gameOverHighScoreDisplay = document.getElementById('gameOverHighScore');
         const signature = document.getElementById('signature');
+        const powerUpMessage = document.getElementById('powerUpMessage');
+        const audioError = document.getElementById('audioError');
+        const audioInstruction = document.getElementById('audioInstruction');
+
+        const eatSound = document.getElementById('eatSound');
+        const gameOverSound = document.getElementById('gameOverSound');
+        const pauseSound = document.getElementById('pauseSound');
+        const powerUpSound = document.getElementById('powerUpSound');
+
+        // Verifica se os áudios foram carregados
+        let audioLoaded = false;
+        [eatSound, gameOverSound, pauseSound, powerUpSound].forEach(sound => {
+            sound.addEventListener('canplaythrough', () => {
+                console.log(`${sound.id} carregado com sucesso.`);
+                audioLoaded = true;
+                audioError.classList.add('hidden');
+            });
+            sound.addEventListener('error', () => {
+                console.error(`Erro ao carregar ${sound.id}: Verifique os arquivos (eat.mp3, gameover.mp3, pause.mp3, powerup.mp3) na pasta.`);
+                audioError.classList.remove('hidden');
+            });
+        });
 
         const gridSize = 20;
-        let snake, food, direction, score, speed, gameInterval, changingDirection;
+        let snake, food, direction, score, speed, gameInterval, changingDirection, highScore;
         let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
         let demoSnake, demoDirection, animationFrameId;
         let isPaused = false;
-        let foodAnimationPhase = 0; // Para animação da comida
+        let foodAnimationPhase = 0;
+        let slowdownActive = false;
+        let speedupActive = false;
+        let originalSpeed = 0;
+
+        // Carrega high score do localStorage ao iniciar
+        function loadHighScore() {
+            const savedHighScore = localStorage.getItem('snakeHighScore');
+            return savedHighScore ? parseInt(savedHighScore) : 0;
+        }
+
+        // Salva high score no localStorage
+        function saveHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snakeHighScore', highScore);
+            }
+        }
 
         // =================================================================
         // 2. LÓGICA DA GRELHA E DIMENSÕES
@@ -204,10 +311,10 @@
             backgroundCanvas.height = h;
             gameCanvas.width = w;
             gameCanvas.height = h;
-            drawBackgroundGrid(); // Redesenha o fundo ao redimensionar
+            drawBackgroundGrid();
+            console.log("Canvases resized:", w, h); // Depuração
         }
 
-        // Novo: Desenha o fundo estático uma vez
         function drawBackgroundGrid() {
             const numCols = getGridCols();
             const numRows = getGridRows();
@@ -227,22 +334,102 @@
             gameCtx.strokeRect(x * gridSize, y * gridSize, gridSize, gridSize);
         }
 
-        // Novo: Desenho da comida com efeito de pulsação
-        function drawFood() {
-            const pulse = Math.sin(foodAnimationPhase) * 0.3 + 0.7; // Intensidade do brilho
-            const size = gridSize * pulse;
-            const offset = (gridSize - size) / 2;
-            gameCtx.fillStyle = `rgba(255, 51, 51, ${pulse})`;
+        function drawStar(x, y, size) {
+            const cx = x * gridSize + gridSize / 2;
+            const cy = y * gridSize + gridSize / 2;
             gameCtx.beginPath();
-            gameCtx.arc(
-                food.x * gridSize + gridSize / 2,
-                food.y * gridSize + gridSize / 2,
-                size / 2,
-                0,
-                2 * Math.PI
-            );
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+                const outerX = cx + Math.cos(angle) * (size / 2);
+                const outerY = cy + Math.sin(angle) * (size / 2);
+                gameCtx.lineTo(outerX, outerY);
+                const innerAngle = angle + Math.PI / 5;
+                const innerX = cx + Math.cos(innerAngle) * (size / 4);
+                const innerY = cy + Math.sin(innerAngle) * (size / 4);
+                gameCtx.lineTo(innerX, innerY);
+            }
+            gameCtx.closePath();
             gameCtx.fill();
-            foodAnimationPhase += 0.1; // Incrementa para animação suave
+        }
+
+        function drawHeart(x, y, size) {
+            const cx = x * gridSize + gridSize / 2;
+            const cy = y * gridSize + gridSize / 2;
+            gameCtx.beginPath();
+            gameCtx.moveTo(cx, cy - size / 4);
+            gameCtx.bezierCurveTo(cx + size / 4, cy - size / 2, cx + size / 2, cy - size / 4, cx + size / 2, cy);
+            gameCtx.bezierCurveTo(cx + size / 2, cy + size / 2, cx, cy + size / 4, cx, cy + size / 2);
+            gameCtx.bezierCurveTo(cx - size / 2, cy + size / 2, cx - size / 2, cy - size / 4, cx, cy - size / 4);
+            gameCtx.closePath();
+            gameCtx.fill();
+        }
+
+        function drawRocket(x, y, size) {
+            const cx = x * gridSize + gridSize / 2;
+            const cy = y * gridSize + gridSize / 2;
+            gameCtx.beginPath();
+            gameCtx.moveTo(cx - size / 4, cy - size / 2);
+            gameCtx.lineTo(cx + size / 4, cy - size / 2);
+            gameCtx.lineTo(cx + size / 4, cy + size / 2);
+            gameCtx.lineTo(cx, cy + size);
+            gameCtx.lineTo(cx - size / 4, cy + size / 2);
+            gameCtx.closePath();
+            gameCtx.fill();
+            gameCtx.fillStyle = '#ff4500';
+            gameCtx.beginPath();
+            gameCtx.moveTo(cx - size / 8, cy + size / 2);
+            gameCtx.lineTo(cx, cy + size * 3 / 4);
+            gameCtx.lineTo(cx + size / 8, cy + size / 2);
+            gameCtx.closePath();
+            gameCtx.fill();
+        }
+
+        function drawFood() {
+            const pulse = Math.sin(foodAnimationPhase) * 0.3 + 0.7;
+            const size = gridSize * pulse * 0.8;
+            const cx = food.x * gridSize + gridSize / 2;
+            const cy = food.y * gridSize + gridSize / 2;
+
+            gameCtx.save();
+            gameCtx.translate(cx, cy);
+            gameCtx.scale(pulse, pulse);
+            gameCtx.translate(-cx, -cy);
+
+            if (food.type === 'bonus') {
+                gameCtx.fillStyle = '#ffcc00';
+                drawStar(food.x, food.y, size);
+            } else if (food.type === 'slowdown') {
+                gameCtx.fillStyle = '#00bfff';
+                drawHeart(food.x, food.y, size);
+            } else if (food.type === 'speedup') {
+                gameCtx.fillStyle = '#ff4500';
+                drawRocket(food.x, food.y, size);
+            } else {
+                gameCtx.fillStyle = '#ff3333';
+                gameCtx.beginPath();
+                gameCtx.arc(cx, cy, size / 2, 0, 2 * Math.PI);
+                gameCtx.fill();
+            }
+
+            gameCtx.restore();
+            foodAnimationPhase += 0.1;
+        }
+
+        function showPowerUpMessage(type) {
+            powerUpMessage.classList.remove('hidden', 'bonus', 'slowdown', 'speedup');
+            if (type === 'bonus') {
+                powerUpMessage.textContent = 'Bônus: +5 Pontos!';
+                powerUpMessage.classList.add('bonus');
+            } else if (type === 'slowdown') {
+                powerUpMessage.textContent = 'Slowdown: Jogo mais lento!';
+                powerUpMessage.classList.add('slowdown');
+            } else if (type === 'speedup') {
+                powerUpMessage.textContent = 'Speedup: Jogo mais rápido!';
+                powerUpMessage.classList.add('speedup');
+            }
+            setTimeout(() => {
+                powerUpMessage.classList.add('hidden');
+            }, 3000);
         }
 
         // =================================================================
@@ -250,7 +437,7 @@
         // =================================================================
         function initializeBackgroundAnimation() {
             resizeAllCanvases();
-            drawBackgroundGrid(); // Desenha o fundo uma vez
+            drawBackgroundGrid();
             demoSnake = [{ x: 5, y: 5 }, { x: 4, y: 5 }, { x: 3, y: 5 }];
             demoDirection = 'right';
             animateBackground();
@@ -276,7 +463,6 @@
             demoSnake.unshift(head);
             demoSnake.pop();
 
-            // Só limpa e redesenha a área necessária
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
             drawBackgroundGrid();
             demoSnake.forEach((segment, index) => {
@@ -294,25 +480,32 @@
         // =================================================================
         function initializeGame() {
             resizeAllCanvases();
+            console.log("Initializing game..."); // Depuração
             const numCols = getGridCols();
             const numRows = getGridRows();
             snake = [{ x: Math.floor(numCols / 2), y: Math.floor(numRows / 2) }];
             placeFood();
             direction = 'right';
             score = 0;
+            highScore = loadHighScore();
             speed = 150;
             changingDirection = false;
             isPaused = false;
-            scoreDisplay.textContent = `Pontos: ${score}`;
+            slowdownActive = false;
+            speedupActive = false;
+            scoreDisplay.textContent = `Pontos: ${score} (High: ${highScore})`;
+            powerUpMessage.classList.add('hidden');
+            if (!snake || !food) {
+                console.error("Erro: snake ou food não inicializados corretamente");
+            }
         }
 
-        // Novo: Função otimizada para posicionar comida
         function placeFood() {
             const numCols = getGridCols();
             const numRows = getGridRows();
             let newFood;
             let attempts = 0;
-            const maxAttempts = 100; // Evita loop infinito
+            const maxAttempts = 100;
 
             do {
                 newFood = {
@@ -323,10 +516,23 @@
             } while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) && attempts < maxAttempts);
 
             if (attempts >= maxAttempts) {
-                food = { x: -1, y: -1 }; // Caso raro: sem espaço
+                console.warn("Máximo de tentativas atingido, usando posição inválida");
+                food = { x: -1, y: -1, type: 'normal' };
                 return;
             }
+
+            const rand = Math.random();
+            if (rand < 0.05) {
+                newFood.type = 'slowdown';
+            } else if (rand < 0.10) {
+                newFood.type = 'speedup';
+            } else if (rand < 0.20) {
+                newFood.type = 'bonus';
+            } else {
+                newFood.type = 'normal';
+            }
             food = newFood;
+            console.log("Food placed at:", newFood.x, newFood.y, "type:", newFood.type); // Depuração
         }
 
         function gameLoop() {
@@ -342,7 +548,7 @@
 
         function drawFrame() {
             gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-            drawFood();
+            if (food.x >= 0 && food.y >= 0) drawFood(); // Verifica se food é válido
             snake.forEach((segment, index) => {
                 const color = index === 0 ? '#3fff3f' : '#2cae2c';
                 drawOnGameCanvas(segment.x, segment.y, color);
@@ -371,12 +577,62 @@
             }
             snake.unshift(head);
             if (head.x === food.x && head.y === food.y) {
-                score++;
-                scoreDisplay.textContent = `Pontos: ${score}`;
+                let points = 1;
+                let sound = eatSound;
+                if (food.type === 'bonus') {
+                    points = 5;
+                    showPowerUpMessage('bonus');
+                    sound = powerUpSound;
+                } else if (food.type === 'slowdown') {
+                    showPowerUpMessage('slowdown');
+                    sound = powerUpSound;
+                    if (!slowdownActive) {
+                        slowdownActive = true;
+                        originalSpeed = speed;
+                        speed += 50;
+                        clearInterval(gameInterval);
+                        gameInterval = setInterval(gameLoop, speed);
+                        setTimeout(() => {
+                            slowdownActive = false;
+                            speed = originalSpeed;
+                            clearInterval(gameInterval);
+                            gameInterval = setInterval(gameLoop, speed);
+                        }, 10000);
+                    }
+                } else if (food.type === 'speedup') {
+                    showPowerUpMessage('speedup');
+                    sound = powerUpSound;
+                    if (!speedupActive) {
+                        speedupActive = true;
+                        originalSpeed = speed;
+                        speed = Math.max(50, speed - 50); // Aumenta velocidade
+                        clearInterval(gameInterval);
+                        gameInterval = setInterval(gameLoop, speed);
+                        setTimeout(() => {
+                            speedupActive = false;
+                            speed = originalSpeed;
+                            clearInterval(gameInterval);
+                            gameInterval = setInterval(gameLoop, speed);
+                        }, 10000);
+                    }
+                } else {
+                    speed = Math.max(50, speed - 2);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(gameLoop, speed);
+                }
+                score += points;
+                saveHighScore(); // Atualiza high score se necessário
+                scoreDisplay.textContent = `Pontos: ${score} (High: ${highScore})`;
+                scoreDisplay.classList.add('update');
+                setTimeout(() => {
+                    scoreDisplay.classList.remove('update');
+                }, 300);
+                sound.currentTime = 0;
+                sound.play().catch(e => {
+                    console.error(`Erro ao tocar ${sound.id}:`, e);
+                    if (!audioLoaded) audioError.classList.remove('hidden');
+                });
                 placeFood();
-                speed = Math.max(50, speed - 2);
-                clearInterval(gameInterval);
-                gameInterval = setInterval(gameLoop, speed);
             } else {
                 snake.pop();
             }
@@ -403,11 +659,10 @@
                 case 'ArrowDown': setDirection('down'); break;
                 case 'ArrowLeft': setDirection('left'); break;
                 case 'ArrowRight': setDirection('right'); break;
-                case 'p': case 'P': togglePause(); break; // Novo: Pausa com 'P'
+                case 'p': case 'P': togglePause(); break;
             }
         }
 
-        // Novo: Função para pausar/continuar
         function togglePause() {
             if (isPaused) {
                 isPaused = false;
@@ -418,6 +673,8 @@
                 clearInterval(gameInterval);
                 pauseScreen.classList.remove('hidden');
             }
+            pauseSound.currentTime = 0;
+            pauseSound.play().catch(e => console.error("Erro ao tocar som de pausa:", e));
         }
 
         function handleTouchStart(event) {
@@ -455,16 +712,20 @@
         // 6. GESTÃO DO FLUXO DO JOGO (INICIAR/PARAR)
         // =================================================================
         function runGame() {
+            console.log("Starting game..."); // Depuração
             clearTimeout(animationFrameId);
             startScreen.classList.add('hidden');
             signature.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
             pauseScreen.classList.add('hidden');
             scoreDisplay.classList.remove('hidden');
+            powerUpMessage.classList.add('hidden');
+            audioInstruction.classList.add('hidden'); // Esconde instrução após iniciar
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
 
             initializeGame();
             addEventListeners();
+            if (gameInterval) clearInterval(gameInterval); // Garante que não haja intervalos duplicados
             gameInterval = setInterval(gameLoop, speed);
         }
 
@@ -473,7 +734,12 @@
             removeEventListeners();
             gameOverScreen.classList.remove('hidden');
             scoreDisplay.classList.add('hidden');
+            powerUpMessage.classList.add('hidden');
             finalScoreDisplay.textContent = score;
+            gameOverHighScoreDisplay.textContent = highScore;
+            saveHighScore(); // Salva o high score ao finalizar
+            gameOverSound.currentTime = 0;
+            gameOverSound.play().catch(e => console.error("Erro ao tocar som de game over:", e));
         }
 
         // =================================================================
