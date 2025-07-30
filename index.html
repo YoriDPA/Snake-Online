@@ -79,11 +79,16 @@
             cursor: pointer;
             transition: all 0.2s ease;
             box-shadow: 0 0 20px rgba(63, 255, 63, 0.7);
+            margin: 10px 0;
         }
         .game-button:hover {
             background-color: #fff;
             color: #3fff3f;
             box-shadow: 0 0 25px #fff;
+        }
+        .game-button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
         }
 
         .game-over-dialog, .pause-dialog {
@@ -160,7 +165,6 @@
             100% { opacity: 0; }
         }
 
-        /* Novo: Mensagem de erro de áudio */
         .audio-error {
             position: absolute;
             top: 10px;
@@ -181,7 +185,7 @@
         <div class="ui-overlay">
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
-                <p id="audioInstruction" style="color: #fff; font-size: 1rem;">Clique em "Iniciar" para desbloquear o áudio.</p>
+                <p id="audioInstruction" style="color: #fff; font-size: 1rem;">Clique em 'Iniciar' para começar.</p>
                 <button id="startButton" class="game-button">Iniciar</button>
             </div>
 
@@ -258,15 +262,15 @@
         const powerUpSound = document.getElementById('powerUpSound');
 
         // Verifica se os áudios foram carregados
-        let audioLoaded = false;
-        [eatSound, gameOverSound, pauseSound, powerUpSound].forEach(sound => {
+        let audioReady = false;
+        const sounds = [eatSound, gameOverSound, pauseSound, powerUpSound];
+        sounds.forEach(sound => {
             sound.addEventListener('canplaythrough', () => {
                 console.log(`${sound.id} carregado com sucesso.`);
-                audioLoaded = true;
-                audioError.classList.add('hidden');
             });
-            sound.addEventListener('error', () => {
-                console.error(`Erro ao carregar ${sound.id}: Verifique os arquivos (eat.mp3, gameover.mp3, pause.mp3, powerup.mp3) na pasta.`);
+            sound.addEventListener('error', (e) => {
+                console.error(`Erro ao carregar ${sound.id}:`, e);
+                audioError.textContent = `Erro: ${sound.id} não carregado. Verifique os arquivos (eat.mp3, gameover.mp3, pause.mp3, powerup.mp3)!`;
                 audioError.classList.remove('hidden');
             });
         });
@@ -495,8 +499,10 @@
             speedupActive = false;
             scoreDisplay.textContent = `Pontos: ${score} (High: ${highScore})`;
             powerUpMessage.classList.add('hidden');
-            if (!snake || !food) {
-                console.error("Erro: snake ou food não inicializados corretamente");
+            if (!snake || !food || food.x < 0 || food.y < 0) {
+                console.error("Erro: snake ou food não inicializados corretamente:", { snake, food });
+                alert("Erro na inicialização do jogo. Verifique o console para detalhes.");
+                return; // Impede o jogo de continuar se falhar
             }
         }
 
@@ -517,8 +523,7 @@
 
             if (attempts >= maxAttempts) {
                 console.warn("Máximo de tentativas atingido, usando posição inválida");
-                food = { x: -1, y: -1, type: 'normal' };
-                return;
+                newFood = { x: -1, y: -1, type: 'normal' };
             }
 
             const rand = Math.random();
@@ -548,7 +553,7 @@
 
         function drawFrame() {
             gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-            if (food.x >= 0 && food.y >= 0) drawFood(); // Verifica se food é válido
+            if (food && food.x >= 0 && food.y >= 0) drawFood(); // Verifica se food é válido
             snake.forEach((segment, index) => {
                 const color = index === 0 ? '#3fff3f' : '#2cae2c';
                 drawOnGameCanvas(segment.x, segment.y, color);
@@ -627,11 +632,10 @@
                 setTimeout(() => {
                     scoreDisplay.classList.remove('update');
                 }, 300);
-                sound.currentTime = 0;
-                sound.play().catch(e => {
-                    console.error(`Erro ao tocar ${sound.id}:`, e);
-                    if (!audioLoaded) audioError.classList.remove('hidden');
-                });
+                if (sound) {
+                    sound.currentTime = 0;
+                    sound.play().catch(e => console.error(`Erro ao tocar ${sound.id}:`, e));
+                }
                 placeFood();
             } else {
                 snake.pop();
@@ -720,13 +724,14 @@
             pauseScreen.classList.add('hidden');
             scoreDisplay.classList.remove('hidden');
             powerUpMessage.classList.add('hidden');
-            audioInstruction.classList.add('hidden'); // Esconde instrução após iniciar
+            audioInstruction.classList.add('hidden');
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
 
             initializeGame();
             addEventListeners();
             if (gameInterval) clearInterval(gameInterval); // Garante que não haja intervalos duplicados
             gameInterval = setInterval(gameLoop, speed);
+            console.log("Game loop started:", { snake, food, speed }); // Depuração
         }
 
         function stopGame() {
@@ -737,7 +742,7 @@
             powerUpMessage.classList.add('hidden');
             finalScoreDisplay.textContent = score;
             gameOverHighScoreDisplay.textContent = highScore;
-            saveHighScore(); // Salva o high score ao finalizar
+            saveHighScore();
             gameOverSound.currentTime = 0;
             gameOverSound.play().catch(e => console.error("Erro ao tocar som de game over:", e));
         }
