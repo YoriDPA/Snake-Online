@@ -260,7 +260,7 @@
                         <ul id="topScoresList"></ul>
                     </div>
                 </div>
-                <div class="name-input-container" id="nameInputSection" style="margin-bottom: 20px;">
+                <div class="name-input-container" id="nameInputSection">
                     <input type="text" id="playerNameInput" placeholder="Digite seu nome">
                     <button id="submitNameButton" class="game-button">Confirmar</button>
                 </div>
@@ -323,7 +323,7 @@
         const submitNameButton = document.getElementById('submitNameButton');
         const nameInputSection = document.getElementById('nameInputSection');
 
-        let playerName = 'Jogador';
+        let playerName = localStorage.getItem('playerName') || null;
         let isSoundOn = true;
         let audioReady = false;
 
@@ -831,6 +831,11 @@
 
         window.addEventListener('load', () => {
             setTimeout(() => {
+                if (playerName) {
+                    nameInputSection.style.display = 'none';
+                    startButton.style.display = 'block';
+                }
+
                 startButton.addEventListener('click', runGame);
                 restartButton.addEventListener('click', runGame);
                 resumeButton.addEventListener('click', togglePause);
@@ -867,6 +872,7 @@
                     const name = playerNameInput.value.trim();
                     if (isValidName(name)) {
                         playerName = name;
+                        localStorage.setItem('playerName', name);
                         nameInputSection.style.display = 'none';
                         startButton.style.display = 'block';
                     } else {
