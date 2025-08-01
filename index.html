@@ -175,6 +175,74 @@
             color: rgba(255, 255, 255, 0.5);
             letter-spacing: 1px;
         }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .dropdown-button {
+            background-color: #3fff3f;
+            color: #000;
+            padding: 10px 20px;
+            border: 2px solid #3fff3f;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 10px rgba(63, 255, 63, 0.7);
+        }
+        .dropdown-button:hover {
+            background-color: #fff;
+            color: #3fff3f;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.85);
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border: 2px solid #3fff3f;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: left;
+        }
+        .dropdown-content li {
+            color: #ffcc00;
+            padding: 5px 0;
+            font-size: 1rem;
+        }
+        .dropdown-content.show {
+            display: block;
+        }
+        .name-input-container {
+            margin: 20px 0;
+        }
+        #playerNameInput {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: 2px solid #3fff3f;
+            border-radius: 5px;
+            padding: 5px;
+            font-size: 1rem;
+            text-align: center;
+            width: 200px;
+        }
+        #submitNameButton {
+            background-color: #3fff3f;
+            color: #000;
+            padding: 5px 15px;
+            border: 2px solid #3fff3f;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+        #submitNameButton:hover {
+            background-color: #fff;
+            color: #3fff3f;
+        }
     </style>
 </head>
 <body>
@@ -186,7 +254,17 @@
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
                 <p class="ranking-display">High Score: <span id="startHighScore">0</span></p>
-                <button id="startButton" class="game-button">Iniciar</button>
+                <div class="dropdown">
+                    <button id="topScoresButton" class="dropdown-button">Ver Top 10 Scores</button>
+                    <div id="dropdownContent" class="dropdown-content">
+                        <ul id="topScoresList"></ul>
+                    </div>
+                </div>
+                <div class="name-input-container" id="nameInputSection">
+                    <input type="text" id="playerNameInput" placeholder="Digite seu nome">
+                    <button id="submitNameButton" class="game-button">Confirmar</button>
+                </div>
+                <button id="startButton" class="game-button" style="display: none;">Iniciar</button>
                 <p class="signature">Criado por YoriDPA</p>
             </div>
 
@@ -238,7 +316,14 @@
         const gameOverHighScoreDisplay = document.getElementById('gameOverHighScore');
         const startHighScoreDisplay = document.getElementById('startHighScore');
         const powerUpMessage = document.getElementById('powerUpMessage');
+        const topScoresButton = document.getElementById('topScoresButton');
+        const dropdownContent = document.getElementById('dropdownContent');
+        const topScoresList = document.getElementById('topScoresList');
+        const playerNameInput = document.getElementById('playerNameInput');
+        const submitNameButton = document.getElementById('submitNameButton');
+        const nameInputSection = document.getElementById('nameInputSection');
 
+        let playerName = 'Jogador';
         let isSoundOn = true;
         let audioReady = false;
 
@@ -281,29 +366,46 @@
         }
 
         const gridSize = 20;
-        let snake, food, powerUp, direction, score, speed, gameInterval, changingDirection, highScore;
+        let snake, food, powerUp, direction, score, speed, gameInterval, changingDirection;
         let isPaused = false;
         
         let powerUpTimer = null;
         const POWERUP_LIFESPAN = 7000;
         const POWERUP_SPAWN_INTERVAL = 10000;
 
-        function loadHighScore() {
-            const savedHighScore = localStorage.getItem('snakeHighScore');
-            return savedHighScore ? parseInt(savedHighScore) : 0;
+        function loadTopScores() {
+            const savedTopScores = localStorage.getItem('snakeTopScores');
+            return savedTopScores ? JSON.parse(savedTopScores) : [];
         }
 
-        function saveHighScore(newScore) {
-            if (newScore > highScore) {
-                highScore = newScore;
-                localStorage.setItem('snakeHighScore', highScore);
+        function saveTopScores(name, newScore) {
+            let topScores = loadTopScores();
+            const existingIndex = topScores.findIndex(entry => entry.name === name);
+            if (existingIndex !== -1) {
+                if (newScore > topScores[existingIndex].score) {
+                    topScores[existingIndex].score = newScore;
+                }
+            } else {
+                topScores.push({ name, score: newScore });
             }
+            topScores.sort((a, b) => b.score - a.score);
+            topScores = topScores.slice(0, 10);
+            localStorage.setItem('snakeTopScores', JSON.stringify(topScores));
+            return topScores;
         }
         
         function updateHighScoreDisplays() {
-            const currentHighScore = loadHighScore();
-            startHighScoreDisplay.textContent = currentHighScore;
-            gameOverHighScoreDisplay.textContent = currentHighScore;
+            const topScores = loadTopScores();
+            const highScore = topScores.length > 0 ? topScores[0].score : 0;
+            startHighScoreDisplay.textContent = highScore;
+            gameOverHighScoreDisplay.textContent = highScore;
+
+            topScoresList.innerHTML = '';
+            topScores.forEach((entry, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${entry.name}: ${entry.score}`;
+                topScoresList.appendChild(li);
+            });
         }
 
         function getGridCols() { return Math.floor(document.documentElement.clientWidth / gridSize); }
@@ -433,7 +535,6 @@
             
             direction = null;
             score = 0;
-            highScore = loadHighScore();
             speed = 150;
             changingDirection = false;
             isPaused = false;
@@ -572,7 +673,6 @@
                 scoreDisplay.textContent = score;
                 scoreDisplay.classList.add('update');
                 setTimeout(() => scoreDisplay.classList.remove('update'), 300);
-                saveHighScore(score);
             } else {
                 snake.pop();
             }
@@ -660,6 +760,7 @@
             scoreDisplay.classList.add('hidden');
             startMovementButton.classList.add('hidden');
             finalScoreDisplay.textContent = score;
+            saveTopScores(playerName, score);
             updateHighScoreDisplays();
             playSound('gameOver');
         }
@@ -737,6 +838,7 @@
                 backToMenuButton.addEventListener('click', () => {
                     gameOverScreen.classList.add('hidden');
                     startScreen.classList.remove('hidden');
+                    updateHighScoreDisplays();
                     initializeBackgroundAnimation();
                 });
 
@@ -757,12 +859,38 @@
                     icon.classList.toggle('muted', !isSoundOn);
                 });
 
+                topScoresButton.addEventListener('click', () => {
+                    dropdownContent.classList.toggle('show');
+                });
+
+                submitNameButton.addEventListener('click', () => {
+                    const name = playerNameInput.value.trim();
+                    if (isValidName(name)) {
+                        playerName = name;
+                        nameInputSection.style.display = 'none';
+                        startButton.style.display = 'block';
+                    } else {
+                        alert('Nome inválido! Use apenas letras, números e espaços.');
+                    }
+                });
+
+                playerNameInput.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter') {
+                        submitNameButton.click();
+                    }
+                });
+
                 window.addEventListener('resize', resizeAllCanvases);
 
                 updateHighScoreDisplays();
                 initializeBackgroundAnimation();
             }, 100);
         });
+
+        function isValidName(name) {
+            const validPattern = /^[a-zA-Z0-9\s]+$/;
+            return name && validPattern.test(name);
+        }
     </script>
 </body>
 </html>
