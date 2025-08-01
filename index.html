@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    
+    <!-- Scripts Firebase ATIVADOS -->
+    <!-- Usando as versões compatíveis para manter seu código 'firebase.database()' funcionando -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
     <style>
         html, body {
             height: 100%;
@@ -257,7 +263,7 @@
                 <div class="dropdown">
                     <button id="topScoresButton" class="dropdown-button">Ver Top 10 Scores</button>
                     <div id="dropdownContent" class="dropdown-content">
-                        <ul id="topScoresList"></ul>
+                        <ul id="topScoresList"><li>Carregando...</li></ul>
                     </div>
                 </div>
                 <div class="name-input-container" id="nameInputSection">
@@ -296,6 +302,39 @@
     </div>
 
     <script>
+        // Configuração do Firebase fornecida por você
+        const firebaseConfig = {
+            apiKey: "AIzaSyAiSenlXeewlgk5QIAsDsdnUzDX4oxH_jY",
+            authDomain: "snakeonline-yoridpa.firebaseapp.com",
+            databaseURL: "https://snakeonline-yoridpa-default-rtdb.firebaseio.com",
+            projectId: "snakeonline-yoridpa",
+            storageBucket: "snakeonline-yoridpa.firebasestorage.app",
+            messagingSenderId: "961197417042",
+            appId: "1:961197417042:web:5bd08a66178829e5ebf58b",
+            measurementId: "G-QH28JN1KNH"
+        };
+
+        // --- INICIALIZAÇÃO DO FIREBASE ---
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const scoresRef = database.ref('scores');
+        
+        // --- AVISO DE SEGURANÇA IMPORTANTE ---
+        // Vá para o seu Console do Firebase > Realtime Database > Regras
+        // e cole as seguintes regras para permitir que todos leiam e escrevam
+        // no placar. Sem isso, a conexão será bloqueada.
+        // {
+        //   "rules": {
+        //     "scores": {
+        //       ".read": "true",
+        //       ".write": "true",
+        //       "$scoreId": {
+        //         ".validate": "newData.hasChildren(['name', 'score']) && newData.child('name').isString() && newData.child('score').isNumber()"
+        //       }
+        //     }
+        //   }
+        // }
+
         const gameContainer = document.getElementById('game-container');
         const backgroundCanvas = document.getElementById('backgroundCanvas');
         const bgCtx = backgroundCanvas.getContext('2d');
@@ -373,38 +412,58 @@
         const POWERUP_LIFESPAN = 7000;
         const POWERUP_SPAWN_INTERVAL = 10000;
 
-        function loadTopScores() {
-            const savedTopScores = localStorage.getItem('snakeTopScores');
-            return savedTopScores ? JSON.parse(savedTopScores) : [];
+        // --- FUNÇÕES DO FIREBASE ---
+
+        // Carrega os 10 melhores scores do Firebase
+        function loadTopScores(callback) {
+            scoresRef.orderByChild('score').limitToLast(10).once('value', (snapshot) => {
+                const scores = [];
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        scores.push({
+                            name: childSnapshot.val().name,
+                            score: childSnapshot.val().score
+                        });
+                    });
+                    // Firebase retorna em ordem crescente, então revertemos
+                    callback(scores.reverse());
+                } else {
+                    callback([]); // Retorna array vazio se não houver scores
+                }
+            }, (error) => {
+                console.error("Erro ao carregar scores do Firebase:", error);
+                topScoresList.innerHTML = '<li>Erro ao carregar.</li>';
+            });
         }
 
+        // Salva um novo score no Firebase
         function saveTopScores(name, newScore) {
-            let topScores = loadTopScores();
-            const existingIndex = topScores.findIndex(entry => entry.name === name);
-            if (existingIndex !== -1) {
-                if (newScore > topScores[existingIndex].score) {
-                    topScores[existingIndex].score = newScore;
-                }
-            } else {
-                topScores.push({ name, score: newScore });
-            }
-            topScores.sort((a, b) => b.score - a.score);
-            topScores = topScores.slice(0, 10);
-            localStorage.setItem('snakeTopScores', JSON.stringify(topScores));
-            return topScores;
+            if (!name || newScore <= 0) return;
+
+            // Cria uma nova entrada no banco de dados
+            const newScoreRef = scoresRef.push();
+            newScoreRef.set({
+                name: name,
+                score: newScore
+            }).catch(error => console.error("Erro ao salvar score:", error));
         }
         
         function updateHighScoreDisplays() {
-            const topScores = loadTopScores();
-            const highScore = topScores.length > 0 ? topScores[0].score : 0;
-            startHighScoreDisplay.textContent = highScore;
-            gameOverHighScoreDisplay.textContent = highScore;
+            loadTopScores((topScores) => {
+                const highScore = topScores.length > 0 ? topScores[0].score : 0;
+                startHighScoreDisplay.textContent = highScore;
+                gameOverHighScoreDisplay.textContent = highScore;
 
-            topScoresList.innerHTML = '';
-            topScores.forEach((entry, index) => {
-                const li = document.createElement('li');
-                li.textContent = `${index + 1}. ${entry.name}: ${entry.score}`;
-                topScoresList.appendChild(li);
+                topScoresList.innerHTML = '';
+                if (topScores.length > 0) {
+                    topScores.forEach((entry, index) => {
+                        const li = document.createElement('li');
+                        li.textContent = `${index + 1}. ${entry.name || 'Anônimo'}: ${entry.score}`;
+                        topScoresList.appendChild(li);
+                    });
+                } else {
+                    topScoresList.innerHTML = '<li>Nenhum score ainda.</li>';
+                }
             });
         }
 
@@ -614,9 +673,19 @@
             const head = snake[0];
             const numCols = getGridCols();
             const numRows = getGridRows();
+            
+            // Colisão com as paredes
             if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
                 return true;
             }
+            
+            // **CORREÇÃO**: Colisão com o próprio corpo
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -760,8 +829,10 @@
             scoreDisplay.classList.add('hidden');
             startMovementButton.classList.add('hidden');
             finalScoreDisplay.textContent = score;
-            saveTopScores(playerName, score);
-            updateHighScoreDisplays();
+            if (playerName) {
+                saveTopScores(playerName, score); // Salva no Firebase
+            }
+            updateHighScoreDisplays(); // Atualiza do Firebase
             playSound('gameOver');
         }
         
@@ -876,7 +947,8 @@
                         nameInputSection.style.display = 'none';
                         startButton.style.display = 'block';
                     } else {
-                        alert('Nome inválido! Use apenas letras, números e espaços.');
+                        // Usando um modal customizado em vez de alert()
+                        showCustomAlert('Nome inválido! Use apenas letras, números e espaços.');
                     }
                 });
 
@@ -896,6 +968,27 @@
         function isValidName(name) {
             const validPattern = /^[a-zA-Z0-9\s]+$/;
             return name && validPattern.test(name);
+        }
+
+        // Função para mostrar um alerta customizado
+        function showCustomAlert(message) {
+            const alertBox = document.createElement('div');
+            alertBox.style.position = 'fixed';
+            alertBox.style.top = '20px';
+            alertBox.style.left = '50%';
+            alertBox.style.transform = 'translateX(-50%)';
+            alertBox.style.padding = '15px 25px';
+            alertBox.style.backgroundColor = '#ff5555';
+            alertBox.style.color = '#fff';
+            alertBox.style.border = '2px solid #fff';
+            alertBox.style.borderRadius = '10px';
+            alertBox.style.zIndex = '1000';
+            alertBox.style.fontFamily = "'Orbitron', sans-serif";
+            alertBox.textContent = message;
+            document.body.appendChild(alertBox);
+            setTimeout(() => {
+                document.body.removeChild(alertBox);
+            }, 3000);
         }
     </script>
 </body>
