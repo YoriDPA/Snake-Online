@@ -185,12 +185,6 @@
         .sound-toggle i.muted {
             opacity: 0.3;
         }
-        .signature {
-            margin-top: 40px;
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.5);
-            letter-spacing: 1px;
-        }
         .dropdown {
             position: relative;
             display: inline-block;
@@ -262,6 +256,40 @@
             background-color: #fff;
             color: #3fff3f;
         }
+        
+        .footer-container {
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .signature {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
+
+        .contact-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .contact-info p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        #whatsapp-link {
+            font-size: 2rem;
+            color: #25D366;
+            transition: transform 0.3s ease;
+            text-shadow: 0 0 10px rgba(37, 211, 102, 0.7);
+        }
+        #whatsapp-link:hover {
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -279,7 +307,6 @@
                         <ul id="topScoresList"><li>Carregando...</li></ul>
                     </div>
                 </div>
-                <!-- ATUALIZADO: Adicionado campo de senha -->
                 <div class="name-input-container" id="nameInputSection">
                     <input type="text" id="playerNameInput" class="player-input" placeholder="Digite seu nome">
                     <input type="password" id="playerPasswordInput" class="player-input" placeholder="Digite sua senha">
@@ -289,7 +316,17 @@
                     <button id="startButton" class="game-button">Iniciar</button>
                     <button id="changeUserButton" class="game-button secondary">Trocar de Usuário</button>
                 </div>
-                <p class="signature">Criado por YoriDPA</p>
+                
+                <div class="footer-container">
+                    <p class="signature">Criado por YoriDPA</p>
+                    <div class="contact-info">
+                        <p>Dúvidas, sugestões ou reclamações?</p>
+                        <!-- ATUALIZADO: Seu número de WhatsApp -->
+                        <a href="https://wa.me/5527996162221?text=Ol%C3%A1!%20Tenho%20uma%20sugest%C3%A3o%20para%20o%20Snake%20Online." target="_blank" id="whatsapp-link">
+                            <i class="fab fa-whatsapp"></i>
+                        </a>
+                    </div>
+                </div>
             </div>
 
             <div id="gameOverScreen" class="game-over-content hidden">
@@ -317,6 +354,7 @@
         <div class="sound-toggle">
             <button id="soundToggleButton" class="sound-toggle"><i class="fas fa-volume-up"></i></button>
         </div>
+        
     </div>
 
     <script>
@@ -359,7 +397,7 @@
         const dropdownContent = document.getElementById('dropdownContent');
         const topScoresList = document.getElementById('topScoresList');
         const playerNameInput = document.getElementById('playerNameInput');
-        const playerPasswordInput = document.getElementById('playerPasswordInput'); // NOVO
+        const playerPasswordInput = document.getElementById('playerPasswordInput');
         const submitNameButton = document.getElementById('submitNameButton');
         const nameInputSection = document.getElementById('nameInputSection');
         const loggedInSection = document.getElementById('loggedInSection');
@@ -861,10 +899,8 @@
             return name.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
         
-        // NOVO: Função para "hashear" a senha. É simples, mas impede que a senha
-        // seja guardada como texto puro no banco de dados.
         function hashPassword(password) {
-            return btoa(password); // btoa codifica a string para Base64
+            return btoa(password);
         }
 
         window.addEventListener('load', () => {
@@ -903,7 +939,6 @@
                     dropdownContent.classList.toggle('show');
                 });
 
-                // **LÓGICA DE LOGIN/REGISTRO TOTALMENTE REFEITA**
                 submitNameButton.addEventListener('click', () => {
                     const rawName = playerNameInput.value.trim();
                     const password = playerPasswordInput.value.trim();
@@ -918,22 +953,18 @@
 
                     scoresRef.orderByChild('name').equalTo(formattedName).once('value', snapshot => {
                         if (snapshot.exists()) {
-                            // --- LÓGICA DE LOGIN ---
                             const playerData = snapshot.val();
                             const existingPlayerId = Object.keys(playerData)[0];
                             const existingPlayer = playerData[existingPlayerId];
 
                             if (existingPlayer.password === hashedPassword) {
-                                // Senha correta!
                                 localStorage.setItem('playerId', existingPlayerId);
                                 localStorage.setItem('playerName', formattedName);
                                 setupUI();
                             } else {
-                                // Senha incorreta!
                                 showCustomAlert('Senha incorreta para este usuário!');
                             }
                         } else {
-                            // --- LÓGICA DE REGISTRO ---
                             const newPlayerRef = scoresRef.push();
                             newPlayerRef.set({
                                 name: formattedName,
@@ -952,18 +983,18 @@
                     localStorage.removeItem('playerId');
                     playerName = null;
                     playerId = null;
-                    playerPasswordInput.value = ""; // Limpa o campo de senha
+                    playerPasswordInput.value = "";
                     setupUI();
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
                     if (event.key === 'Enter') {
-                        playerPasswordInput.focus(); // Pula para o campo de senha
+                        playerPasswordInput.focus();
                     }
                 });
                 playerPasswordInput.addEventListener('keypress', (event) => {
                     if (event.key === 'Enter') {
-                        submitNameButton.click(); // Submete com Enter
+                        submitNameButton.click();
                     }
                 });
 
