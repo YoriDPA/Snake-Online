@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Online</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- ATENÇÃO: Font Awesome atualizado para incluir ícones de marcas como o WhatsApp -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
@@ -185,6 +186,12 @@
         .sound-toggle i.muted {
             opacity: 0.3;
         }
+        .signature {
+            margin-top: 20px; /* Reduzido para dar espaço ao link do zap */
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
         .dropdown {
             position: relative;
             display: inline-block;
@@ -256,39 +263,27 @@
             background-color: #fff;
             color: #3fff3f;
         }
-        
-        .footer-container {
-            margin-top: 40px;
-            text-align: center;
+        /* NOVO: Estilos para o link do WhatsApp */
+        .whatsapp-link {
+            margin-top: 25px;
+            text-decoration: none;
+            color: #3fff3f;
+            transition: all 0.2s ease;
+            display: inline-block;
         }
-
-        .signature {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.5);
-            letter-spacing: 1px;
+        .whatsapp-link:hover {
+            transform: scale(1.05);
+            text-shadow: 0 0 10px #3fff3f;
         }
-
-        .contact-info {
+        .whatsapp-content {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 10px;
+            font-size: 1rem;
         }
-        
-        .contact-info p {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        #whatsapp-link {
-            font-size: 2rem;
-            color: #25D366;
-            transition: transform 0.3s ease;
-            text-shadow: 0 0 10px rgba(37, 211, 102, 0.7);
-        }
-        #whatsapp-link:hover {
-            transform: scale(1.1);
+        .whatsapp-content i {
+            font-size: 1.5rem;
         }
     </style>
 </head>
@@ -300,7 +295,8 @@
         <div class="ui-overlay">
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
-                <p class="ranking-display">High Score: <span id="startHighScore">0</span></p>
+                <!-- ATUALIZADO: Texto e IDs para o placar dinâmico -->
+                <p class="ranking-display"><span id="highScoreLabel">Recorde Global</span>: <span id="startHighScore">0</span></p>
                 <div class="dropdown">
                     <button id="topScoresButton" class="dropdown-button">Ver Top 10 Scores</button>
                     <div id="dropdownContent" class="dropdown-content">
@@ -316,24 +312,22 @@
                     <button id="startButton" class="game-button">Iniciar</button>
                     <button id="changeUserButton" class="game-button secondary">Trocar de Usuário</button>
                 </div>
-                
-                <div class="footer-container">
-                    <p class="signature">Criado por YoriDPA</p>
-                    <div class="contact-info">
-                        <p>Dúvidas, sugestões ou reclamações?</p>
-                        <!-- ATUALIZADO: Seu número de WhatsApp -->
-                        <a href="https://wa.me/5527996162221?text=Ol%C3%A1!%20Tenho%20uma%20sugest%C3%A3o%20para%20o%20Snake%20Online." target="_blank" id="whatsapp-link">
-                            <i class="fab fa-whatsapp"></i>
-                        </a>
+                <p class="signature">Criado por YoriDPA</p>
+
+                <a href="https://wa.me/5531999999999" target="_blank" class="whatsapp-link">
+                    <div class="whatsapp-content">
+                        <span>Dúvidas ou sugestões?</span>
+                        <i class="fa-brands fa-whatsapp"></i>
                     </div>
-                </div>
+                </a>
             </div>
 
             <div id="gameOverScreen" class="game-over-content hidden">
                 <div class="game-over-dialog">
                     <h1>FIM DE JOGO</h1>
                     <p class="final-score">Score: <span id="finalScore"></span></p>
-                    <p>High Score: <span id="gameOverHighScore"></span></p>
+                    <!-- ATUALIZADO: Texto alterado para clareza -->
+                    <p>Recorde Global: <span id="gameOverHighScore"></span></p>
                     <button id="restartButton" class="game-button">Jogar Novamente</button>
                     <button id="backToMenuButton" class="game-button">Voltar ao Menu</button>
                 </div>
@@ -354,7 +348,6 @@
         <div class="sound-toggle">
             <button id="soundToggleButton" class="sound-toggle"><i class="fas fa-volume-up"></i></button>
         </div>
-        
     </div>
 
     <script>
@@ -484,11 +477,15 @@
             });
         }
         
+        // ATUALIZADO: Lógica para mostrar score pessoal ou global
         function updateHighScoreDisplays() {
+            const highScoreLabel = document.getElementById('highScoreLabel');
+
             loadTopScores((topScores) => {
-                const highScore = topScores.length > 0 ? topScores[0].score : 0;
-                startHighScoreDisplay.textContent = highScore;
-                gameOverHighScoreDisplay.textContent = highScore;
+                const globalHighScore = topScores.length > 0 ? topScores[0].score : 0;
+                
+                gameOverHighScoreDisplay.textContent = globalHighScore;
+
                 topScoresList.innerHTML = '';
                 if (topScores.length > 0) {
                     topScores.forEach((entry, index) => {
@@ -498,6 +495,19 @@
                     });
                 } else {
                     topScoresList.innerHTML = '<li>Nenhum score ainda.</li>';
+                }
+
+                const currentPId = localStorage.getItem('playerId');
+                if (currentPId) {
+                    const userScoreRef = database.ref('scores/' + currentPId + '/score');
+                    userScoreRef.once('value', (snapshot) => {
+                        const userBestScore = snapshot.val() || 0;
+                        highScoreLabel.textContent = 'Seu Recorde';
+                        startHighScoreDisplay.textContent = userBestScore;
+                    });
+                } else {
+                    highScoreLabel.textContent = 'Recorde Global';
+                    startHighScoreDisplay.textContent = globalHighScore;
                 }
             });
         }
@@ -961,6 +971,7 @@
                                 localStorage.setItem('playerId', existingPlayerId);
                                 localStorage.setItem('playerName', formattedName);
                                 setupUI();
+                                updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o login
                             } else {
                                 showCustomAlert('Senha incorreta para este usuário!');
                             }
@@ -974,6 +985,7 @@
                             localStorage.setItem('playerId', newPlayerRef.key);
                             localStorage.setItem('playerName', formattedName);
                             setupUI();
+                            updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o registro
                         }
                     });
                 });
@@ -985,6 +997,7 @@
                     playerId = null;
                     playerPasswordInput.value = "";
                     setupUI();
+                    updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o logout
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
