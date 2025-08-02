@@ -9,7 +9,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
-    <!-- Scripts Firebase ATIVADOS -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
@@ -234,8 +233,11 @@
         }
         .name-input-container {
             margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-        #playerNameInput {
+        .player-input {
             background-color: rgba(0, 0, 0, 0.5);
             color: #fff;
             border: 2px solid #3fff3f;
@@ -248,7 +250,7 @@
         #submitNameButton {
             background-color: #3fff3f;
             color: #000;
-            padding: 5px 15px;
+            padding: 10px 15px;
             border: 2px solid #3fff3f;
             border-radius: 5px;
             font-size: 1rem;
@@ -277,9 +279,11 @@
                         <ul id="topScoresList"><li>Carregando...</li></ul>
                     </div>
                 </div>
+                <!-- ATUALIZADO: Adicionado campo de senha -->
                 <div class="name-input-container" id="nameInputSection">
-                    <input type="text" id="playerNameInput" placeholder="Digite seu nome">
-                    <button id="submitNameButton" class="game-button">Confirmar</button>
+                    <input type="text" id="playerNameInput" class="player-input" placeholder="Digite seu nome">
+                    <input type="password" id="playerPasswordInput" class="player-input" placeholder="Digite sua senha">
+                    <button id="submitNameButton" class="game-button">Login / Registrar</button>
                 </div>
                 <div id="loggedInSection" style="display: none; text-align: center;">
                     <button id="startButton" class="game-button">Iniciar</button>
@@ -355,6 +359,7 @@
         const dropdownContent = document.getElementById('dropdownContent');
         const topScoresList = document.getElementById('topScoresList');
         const playerNameInput = document.getElementById('playerNameInput');
+        const playerPasswordInput = document.getElementById('playerPasswordInput'); // NOVO
         const submitNameButton = document.getElementById('submitNameButton');
         const nameInputSection = document.getElementById('nameInputSection');
         const loggedInSection = document.getElementById('loggedInSection');
@@ -432,11 +437,13 @@
             const currentPId = localStorage.getItem('playerId');
             if (!currentPId || !name || newScore < 0) return;
             const userScoreRef = database.ref('scores/' + currentPId);
-            userScoreRef.set({
-                name: name,
-                score: newScore
-            }).then(() => console.log("Score salvo para o jogador:", name))
-              .catch(error => console.error("Erro ao salvar score:", error));
+            
+            userScoreRef.child('score').once('value', (snapshot) => {
+                const currentScore = snapshot.val() || 0;
+                if (newScore > currentScore) {
+                    userScoreRef.update({ score: newScore });
+                }
+            });
         }
         
         function updateHighScoreDisplays() {
@@ -820,7 +827,7 @@
             else if (demoDirection === 'down' && head.y >= numRows - 1) demoDirection = 'left';
             else if (demoDirection === 'left' && head.x <= 0) demoDirection = 'up';
             else if (demoDirection === 'up' && head.y <= 0) demoDirection = 'right';
-            switch (demoDirection) {
+            switch (direction) {
                 case 'up': head.y--; break;
                 case 'down': head.y++; break;
                 case 'left': head.x--; break;
@@ -850,9 +857,14 @@
             }
         }
 
-        // NOVO: Função para formatar o nome
         function formatPlayerName(name) {
             return name.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+        
+        // NOVO: Função para "hashear" a senha. É simples, mas impede que a senha
+        // seja guardada como texto puro no banco de dados.
+        function hashPassword(password) {
+            return btoa(password); // btoa codifica a string para Base64
         }
 
         window.addEventListener('load', () => {
@@ -891,27 +903,44 @@
                     dropdownContent.classList.toggle('show');
                 });
 
-                // ATUALIZADO: Lógica de submissão de nome com formatação e verificação
+                // **LÓGICA DE LOGIN/REGISTRO TOTALMENTE REFEITA**
                 submitNameButton.addEventListener('click', () => {
                     const rawName = playerNameInput.value.trim();
-                    if (!isValidName(rawName)) {
-                        showCustomAlert('Nome inválido! Use apenas letras, números e espaços.');
+                    const password = playerPasswordInput.value.trim();
+
+                    if (!isValidName(rawName) || !password) {
+                        showCustomAlert('Nome e senha são obrigatórios!');
                         return;
                     }
 
                     const formattedName = formatPlayerName(rawName);
+                    const hashedPassword = hashPassword(password);
 
-                    // Verifica se o nome já existe no banco de dados
                     scoresRef.orderByChild('name').equalTo(formattedName).once('value', snapshot => {
                         if (snapshot.exists()) {
-                            showCustomAlert('Este nome já está em uso. Tente outro!');
-                        } else {
-                            // Nome é único, pode prosseguir
-                            playerName = formattedName;
-                            if (!localStorage.getItem('playerId')) {
-                                const newPlayerId = database.ref().push().key;
-                                localStorage.setItem('playerId', newPlayerId);
+                            // --- LÓGICA DE LOGIN ---
+                            const playerData = snapshot.val();
+                            const existingPlayerId = Object.keys(playerData)[0];
+                            const existingPlayer = playerData[existingPlayerId];
+
+                            if (existingPlayer.password === hashedPassword) {
+                                // Senha correta!
+                                localStorage.setItem('playerId', existingPlayerId);
+                                localStorage.setItem('playerName', formattedName);
+                                setupUI();
+                            } else {
+                                // Senha incorreta!
+                                showCustomAlert('Senha incorreta para este usuário!');
                             }
+                        } else {
+                            // --- LÓGICA DE REGISTRO ---
+                            const newPlayerRef = scoresRef.push();
+                            newPlayerRef.set({
+                                name: formattedName,
+                                password: hashedPassword,
+                                score: 0
+                            });
+                            localStorage.setItem('playerId', newPlayerRef.key);
                             localStorage.setItem('playerName', formattedName);
                             setupUI();
                         }
@@ -923,12 +952,18 @@
                     localStorage.removeItem('playerId');
                     playerName = null;
                     playerId = null;
+                    playerPasswordInput.value = ""; // Limpa o campo de senha
                     setupUI();
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
                     if (event.key === 'Enter') {
-                        submitNameButton.click();
+                        playerPasswordInput.focus(); // Pula para o campo de senha
+                    }
+                });
+                playerPasswordInput.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter') {
+                        submitNameButton.click(); // Submete com Enter
                     }
                 });
 
