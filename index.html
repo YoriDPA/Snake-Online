@@ -10,7 +10,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
     <!-- Scripts Firebase ATIVADOS -->
-    <!-- Usando as versões compatíveis para manter seu código 'firebase.database()' funcionando -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
@@ -87,6 +86,18 @@
             background-color: #fff;
             color: #3fff3f;
             box-shadow: 0 0 25px #fff;
+        }
+        .game-button.secondary {
+            background-color: transparent;
+            color: #3fff3f;
+            font-size: 0.9rem;
+            padding: 8px 15px;
+            margin-top: 20px;
+            box-shadow: none;
+        }
+        .game-button.secondary:hover {
+            background-color: #3fff3f;
+            color: #000;
         }
         .game-over-dialog, .pause-dialog {
             background-color: rgba(0, 0, 0, 0.85);
@@ -270,7 +281,10 @@
                     <input type="text" id="playerNameInput" placeholder="Digite seu nome">
                     <button id="submitNameButton" class="game-button">Confirmar</button>
                 </div>
-                <button id="startButton" class="game-button" style="display: none;">Iniciar</button>
+                <div id="loggedInSection" style="display: none; text-align: center;">
+                    <button id="startButton" class="game-button">Iniciar</button>
+                    <button id="changeUserButton" class="game-button secondary">Trocar de Usuário</button>
+                </div>
                 <p class="signature">Criado por YoriDPA</p>
             </div>
 
@@ -302,7 +316,6 @@
     </div>
 
     <script>
-        // Configuração do Firebase fornecida por você
         const firebaseConfig = {
             apiKey: "AIzaSyAiSenlXeewlgk5QIAsDsdnUzDX4oxH_jY",
             authDomain: "snakeonline-yoridpa.firebaseapp.com",
@@ -314,26 +327,9 @@
             measurementId: "G-QH28JN1KNH"
         };
 
-        // --- INICIALIZAÇÃO DO FIREBASE ---
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const scoresRef = database.ref('scores');
-        
-        // --- AVISO DE SEGURANÇA IMPORTANTE ---
-        // Vá para o seu Console do Firebase > Realtime Database > Regras
-        // e cole as seguintes regras para permitir que todos leiam e escrevam
-        // no placar. Sem isso, a conexão será bloqueada.
-        // {
-        //   "rules": {
-        //     "scores": {
-        //       ".read": "true",
-        //       ".write": "true",
-        //       "$scoreId": {
-        //         ".validate": "newData.hasChildren(['name', 'score']) && newData.child('name').isString() && newData.child('score').isNumber()"
-        //       }
-        //     }
-        //   }
-        // }
 
         const gameContainer = document.getElementById('game-container');
         const backgroundCanvas = document.getElementById('backgroundCanvas');
@@ -361,8 +357,12 @@
         const playerNameInput = document.getElementById('playerNameInput');
         const submitNameButton = document.getElementById('submitNameButton');
         const nameInputSection = document.getElementById('nameInputSection');
+        const loggedInSection = document.getElementById('loggedInSection');
+        const changeUserButton = document.getElementById('changeUserButton');
+
 
         let playerName = localStorage.getItem('playerName') || null;
+        let playerId = localStorage.getItem('playerId') || null;
         let isSoundOn = true;
         let audioReady = false;
 
@@ -377,17 +377,13 @@
             const now = Tone.now();
             try {
                 switch (type) {
-                    case 'eat':
-                        synth.triggerAttackRelease("C6", "16n", now);
-                        break;
+                    case 'eat': synth.triggerAttackRelease("C6", "16n", now); break;
                     case 'powerUp':
                         synth.triggerAttackRelease("C5", "16n", now);
                         synth.triggerAttackRelease("E5", "16n", now + 0.07);
                         synth.triggerAttackRelease("G5", "16n", now + 0.14);
                         break;
-                    case 'pause':
-                        synth.triggerAttackRelease("G4", "16n", now);
-                        break;
+                    case 'pause': synth.triggerAttackRelease("G4", "16n", now); break;
                     case 'gameOver':
                         synth.triggerAttackRelease("G3", "8n", now);
                         synth.triggerAttackRelease("E3", "8n", now + 0.1);
@@ -412,9 +408,6 @@
         const POWERUP_LIFESPAN = 7000;
         const POWERUP_SPAWN_INTERVAL = 10000;
 
-        // --- FUNÇÕES DO FIREBASE ---
-
-        // Carrega os 10 melhores scores do Firebase
         function loadTopScores(callback) {
             scoresRef.orderByChild('score').limitToLast(10).once('value', (snapshot) => {
                 const scores = [];
@@ -425,10 +418,9 @@
                             score: childSnapshot.val().score
                         });
                     });
-                    // Firebase retorna em ordem crescente, então revertemos
                     callback(scores.reverse());
                 } else {
-                    callback([]); // Retorna array vazio se não houver scores
+                    callback([]);
                 }
             }, (error) => {
                 console.error("Erro ao carregar scores do Firebase:", error);
@@ -436,16 +428,15 @@
             });
         }
 
-        // Salva um novo score no Firebase
         function saveTopScores(name, newScore) {
-            if (!name || newScore <= 0) return;
-
-            // Cria uma nova entrada no banco de dados
-            const newScoreRef = scoresRef.push();
-            newScoreRef.set({
+            const currentPId = localStorage.getItem('playerId');
+            if (!currentPId || !name || newScore < 0) return;
+            const userScoreRef = database.ref('scores/' + currentPId);
+            userScoreRef.set({
                 name: name,
                 score: newScore
-            }).catch(error => console.error("Erro ao salvar score:", error));
+            }).then(() => console.log("Score salvo para o jogador:", name))
+              .catch(error => console.error("Erro ao salvar score:", error));
         }
         
         function updateHighScoreDisplays() {
@@ -453,7 +444,6 @@
                 const highScore = topScores.length > 0 ? topScores[0].score : 0;
                 startHighScoreDisplay.textContent = highScore;
                 gameOverHighScoreDisplay.textContent = highScore;
-
                 topScoresList.innerHTML = '';
                 if (topScores.length > 0) {
                     topScores.forEach((entry, index) => {
@@ -536,18 +526,9 @@
             const size = gridSize * 0.8;
             let label = '';
             switch (powerUp.type) {
-                case 'bonus':
-                    gameCtx.fillStyle = '#ffcc00';
-                    label = '+5';
-                    break;
-                case 'speedup':
-                    gameCtx.fillStyle = '#ff5555';
-                    label = '↑';
-                    break;
-                case 'slowdown':
-                    gameCtx.fillStyle = '#55aaff';
-                    label = '↓';
-                    break;
+                case 'bonus': gameCtx.fillStyle = '#ffcc00'; label = '+5'; break;
+                case 'speedup': gameCtx.fillStyle = '#ff5555'; label = '↑'; break;
+                case 'slowdown': gameCtx.fillStyle = '#55aaff'; label = '↓'; break;
             }
             const timeSinceSpawn = Date.now() - powerUp.spawnTime;
             let opacity = 1;
@@ -568,18 +549,9 @@
             powerUpMessage.className = 'powerup-message';
             powerUpMessage.classList.remove('hidden');
             switch (type) {
-                case 'bonus':
-                    powerUpMessage.textContent = 'Bônus: +5 Pontos!';
-                    powerUpMessage.classList.add('bonus');
-                    break;
-                case 'speedup':
-                    powerUpMessage.textContent = 'Velocidade Aumentada!';
-                    powerUpMessage.classList.add('speedup');
-                    break;
-                case 'slowdown':
-                    powerUpMessage.textContent = 'Velocidade Reduzida!';
-                    powerUpMessage.classList.add('slowdown');
-                    break;
+                case 'bonus': powerUpMessage.textContent = 'Bônus: +5 Pontos!'; powerUpMessage.classList.add('bonus'); break;
+                case 'speedup': powerUpMessage.textContent = 'Velocidade Aumentada!'; powerUpMessage.classList.add('speedup'); break;
+                case 'slowdown': powerUpMessage.textContent = 'Velocidade Reduzida!'; powerUpMessage.classList.add('slowdown'); break;
             }
             setTimeout(() => powerUpMessage.classList.add('hidden'), 3000);
         }
@@ -588,10 +560,8 @@
             const numCols = getGridCols();
             const numRows = getGridRows();
             snake = [{ x: Math.floor(numCols / 2), y: Math.floor(numRows / 2) }];
-            
             powerUp = null;
             placeFood();
-            
             direction = null;
             score = 0;
             speed = 150;
@@ -600,7 +570,6 @@
             scoreDisplay.textContent = score;
             updateHighScoreDisplays();
             startMovementButton.classList.remove('hidden');
-
             if (powerUpTimer) clearInterval(powerUpTimer);
             powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
         }
@@ -645,11 +614,9 @@
 
         function gameLoop() {
             if (isPaused) return;
-
             if (powerUp && (Date.now() - powerUp.spawnTime > POWERUP_LIFESPAN)) {
                 powerUp = null;
             }
-
             moveSnake();
             if (isGameOver()) {
                 stopGame();
@@ -673,19 +640,14 @@
             const head = snake[0];
             const numCols = getGridCols();
             const numRows = getGridRows();
-            
-            // Colisão com as paredes
             if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
                 return true;
             }
-            
-            // **CORREÇÃO**: Colisão com o próprio corpo
             for (let i = 1; i < snake.length; i++) {
                 if (head.x === snake[i].x && head.y === snake[i].y) {
                     return true;
                 }
             }
-
             return false;
         }
 
@@ -699,40 +661,24 @@
                 case 'right': head.x++; break;
             }
             snake.unshift(head);
-
             let ateSomething = false;
-
             if (food && head.x === food.x && head.y === food.y) {
                 ateSomething = true;
                 score += 1;
                 playSound('eat');
                 placeFood();
             }
-            
             if (powerUp && head.x === powerUp.x && head.y === powerUp.y) {
                 ateSomething = true;
                 switch (powerUp.type) {
-                    case 'bonus':
-                        score += 5;
-                        playSound('powerUp');
-                        showPowerUpMessage('bonus');
-                        break;
-                    case 'speedup':
-                        speed = Math.max(50, speed - 20);
-                        playSound('powerUp');
-                        showPowerUpMessage('speedup');
-                        break;
-                    case 'slowdown':
-                        speed = Math.min(300, speed + 20);
-                        playSound('powerUp');
-                        showPowerUpMessage('slowdown');
-                        break;
+                    case 'bonus': score += 5; playSound('powerUp'); showPowerUpMessage('bonus'); break;
+                    case 'speedup': speed = Math.max(50, speed - 20); playSound('powerUp'); showPowerUpMessage('speedup'); break;
+                    case 'slowdown': speed = Math.min(300, speed + 20); playSound('powerUp'); showPowerUpMessage('slowdown'); break;
                 }
                 clearInterval(gameInterval);
                 gameInterval = setInterval(gameLoop, speed);
                 powerUp = null;
             }
-
             if (ateSomething) {
                 if (food && head.x === food.x && head.y === food.y) {
                     speed = Math.max(50, speed - 2);
@@ -807,14 +753,11 @@
                 animationFrameId = null;
             }
             resizeAllCanvases(); 
-            
             startScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
             scoreDisplay.classList.remove('hidden');
-            
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
             drawBackgroundGrid();
-            
             initializeGame();
             addEventListeners();
         }
@@ -830,9 +773,9 @@
             startMovementButton.classList.add('hidden');
             finalScoreDisplay.textContent = score;
             if (playerName) {
-                saveTopScores(playerName, score); // Salva no Firebase
+                saveTopScores(playerName, score);
             }
-            updateHighScoreDisplays(); // Atualiza do Firebase
+            updateHighScoreDisplays();
             playSound('gameOver');
         }
         
@@ -856,7 +799,6 @@
             demoSnake = [{ x: 5, y: 5 }, { x: 4, y: 5 }, { x: 3, y: 5 }];
             demoDirection = 'right';
             lastDemoFrameTime = 0;
-            
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
             }
@@ -866,32 +808,26 @@
         function animateBackground(currentTime) {
             if (!animationFrameId) return;
             animationFrameId = requestAnimationFrame(animateBackground);
-
             const elapsed = currentTime - lastDemoFrameTime;
             if (elapsed < demoFrameInterval) {
                 return;
             }
             lastDemoFrameTime = currentTime;
-
             const numCols = getGridCols();
             const numRows = getGridRows();
             let head = { ...demoSnake[0] };
-
             if (demoDirection === 'right' && head.x >= numCols - 1) demoDirection = 'down';
             else if (demoDirection === 'down' && head.y >= numRows - 1) demoDirection = 'left';
             else if (demoDirection === 'left' && head.x <= 0) demoDirection = 'up';
             else if (demoDirection === 'up' && head.y <= 0) demoDirection = 'right';
-
             switch (demoDirection) {
                 case 'up': head.y--; break;
                 case 'down': head.y++; break;
                 case 'left': head.x--; break;
                 case 'right': head.x++; break;
             }
-
             demoSnake.unshift(head);
             demoSnake.pop();
-
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
             drawBackgroundGrid();
             demoSnake.forEach((segment, index) => {
@@ -900,12 +836,28 @@
             });
         }
 
+        function setupUI() {
+            playerName = localStorage.getItem('playerName');
+            playerId = localStorage.getItem('playerId');
+            if (playerName && playerId) {
+                nameInputSection.style.display = 'none';
+                loggedInSection.style.display = 'flex';
+                loggedInSection.style.flexDirection = 'column';
+                loggedInSection.style.alignItems = 'center';
+            } else {
+                nameInputSection.style.display = 'block';
+                loggedInSection.style.display = 'none';
+            }
+        }
+
+        // NOVO: Função para formatar o nome
+        function formatPlayerName(name) {
+            return name.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+
         window.addEventListener('load', () => {
             setTimeout(() => {
-                if (playerName) {
-                    nameInputSection.style.display = 'none';
-                    startButton.style.display = 'block';
-                }
+                setupUI();
 
                 startButton.addEventListener('click', runGame);
                 restartButton.addEventListener('click', runGame);
@@ -939,17 +891,39 @@
                     dropdownContent.classList.toggle('show');
                 });
 
+                // ATUALIZADO: Lógica de submissão de nome com formatação e verificação
                 submitNameButton.addEventListener('click', () => {
-                    const name = playerNameInput.value.trim();
-                    if (isValidName(name)) {
-                        playerName = name;
-                        localStorage.setItem('playerName', name);
-                        nameInputSection.style.display = 'none';
-                        startButton.style.display = 'block';
-                    } else {
-                        // Usando um modal customizado em vez de alert()
+                    const rawName = playerNameInput.value.trim();
+                    if (!isValidName(rawName)) {
                         showCustomAlert('Nome inválido! Use apenas letras, números e espaços.');
+                        return;
                     }
+
+                    const formattedName = formatPlayerName(rawName);
+
+                    // Verifica se o nome já existe no banco de dados
+                    scoresRef.orderByChild('name').equalTo(formattedName).once('value', snapshot => {
+                        if (snapshot.exists()) {
+                            showCustomAlert('Este nome já está em uso. Tente outro!');
+                        } else {
+                            // Nome é único, pode prosseguir
+                            playerName = formattedName;
+                            if (!localStorage.getItem('playerId')) {
+                                const newPlayerId = database.ref().push().key;
+                                localStorage.setItem('playerId', newPlayerId);
+                            }
+                            localStorage.setItem('playerName', formattedName);
+                            setupUI();
+                        }
+                    });
+                });
+                
+                changeUserButton.addEventListener('click', () => {
+                    localStorage.removeItem('playerName');
+                    localStorage.removeItem('playerId');
+                    playerName = null;
+                    playerId = null;
+                    setupUI();
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
@@ -970,7 +944,6 @@
             return name && validPattern.test(name);
         }
 
-        // Função para mostrar um alerta customizado
         function showCustomAlert(message) {
             const alertBox = document.createElement('div');
             alertBox.style.position = 'fixed';
