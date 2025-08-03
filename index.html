@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Online</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
-    <!-- ATENÇÃO: Font Awesome atualizado para incluir ícones de marcas como o WhatsApp -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
@@ -38,11 +37,6 @@
         #backgroundCanvas {
             z-index: 1;
             background-color: #0d0d0d;
-            background-image: url('https://example.com/imagem-gerada-cyberpunk-grid.jpg'); /* Substitua pela URL da imagem gerada por IA (ex: via MidJourney ou similar) */
-            background-size: cover; /* Ou 'repeat' se for tileable para grid infinito */
-            background-repeat: repeat; /* Para efeito infinito */
-            background-position: center;
-            opacity: 0.8; /* Ajuste para mesclar com o grid desenhado, se quiser manter linhas visíveis */
         }
         #gameCanvas {
             z-index: 2;
@@ -121,7 +115,13 @@
         .final-score {
             font-size: 1.8rem;
             color: #ffcc00;
-            margin: 20px 0;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .player-rank {
+            font-size: 1.5rem;
+            color: #55aaff;
+            margin: 10px 0;
             font-weight: bold;
         }
         .score-display {
@@ -156,9 +156,8 @@
             z-index: 9;
         }
         .powerup-message.bonus { color: #ffcc00; }
-        .powerup-message.speedchange { color: #ffff00; }
-        .powerup-message.levelup { color: #ffffff; }
-        .powerup-message.hunger { color: #ff0000; } /* Novo: Para alerta de fome */
+        .powerup-message.speedup { color: #ff5555; }
+        .powerup-message.slowdown { color: #55aaff; }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
@@ -193,7 +192,7 @@
             opacity: 0.3;
         }
         .signature {
-            margin-top: 20px; /* Reduzido para dar espaço ao link do zap */
+            margin-top: 20px;
             font-size: 0.9rem;
             color: rgba(255, 255, 255, 0.5);
             letter-spacing: 1px;
@@ -269,7 +268,6 @@
             background-color: #fff;
             color: #3fff3f;
         }
-        /* NOVO: Estilos para o link do WhatsApp */
         .whatsapp-link {
             margin-top: 25px;
             text-decoration: none;
@@ -301,7 +299,6 @@
         <div class="ui-overlay">
             <div id="startScreen" class="start-screen-content">
                 <h1 class="game-title">SNAKE ONLINE</h1>
-                <!-- ATUALIZADO: Texto e IDs para o placar dinâmico -->
                 <p class="ranking-display"><span id="highScoreLabel">Recorde Global</span>: <span id="startHighScore">0</span></p>
                 <div class="dropdown">
                     <button id="topScoresButton" class="dropdown-button">Ver Top 10 Scores</button>
@@ -320,7 +317,6 @@
                 </div>
                 <p class="signature">Criado por YoriDPA</p>
 
-                <!-- ATUALIZADO: Seu número de WhatsApp -->
                 <a href="https://wa.me/5527996162221" target="_blank" class="whatsapp-link">
                     <div class="whatsapp-content">
                         <span>Dúvidas ou sugestões?</span>
@@ -333,7 +329,8 @@
                 <div class="game-over-dialog">
                     <h1>FIM DE JOGO</h1>
                     <p class="final-score">Score: <span id="finalScore"></span></p>
-                    <!-- ATUALIZADO: Texto alterado para clareza -->
+                    <!-- NOVO: Campo para mostrar a posição no ranking -->
+                    <p class="player-rank">Sua Posição: <span id="playerRank">--</span></p>
                     <p>Recorde Global: <span id="gameOverHighScore"></span></p>
                     <button id="restartButton" class="game-button">Jogar Novamente</button>
                     <button id="backToMenuButton" class="game-button">Voltar ao Menu</button>
@@ -373,6 +370,7 @@
         const database = firebase.database();
         const scoresRef = database.ref('scores');
 
+        // ... (o resto do código inicial é o mesmo)
         const gameContainer = document.getElementById('game-container');
         const backgroundCanvas = document.getElementById('backgroundCanvas');
         const bgCtx = backgroundCanvas.getContext('2d');
@@ -432,7 +430,6 @@
                         synth.triggerAttackRelease("E3", "8n", now + 0.1);
                         synth.triggerAttackRelease("C3", "8n", now + 0.2);
                         break;
-                    case 'hunger': synth.triggerAttackRelease("C3", "8n", now); break; // Som novo para fome
                 }
             } catch (e) { console.error("Erro ao tocar som com Tone.js:", e); }
         }
@@ -447,10 +444,6 @@
         const gridSize = 20;
         let snake, food, powerUp, direction, score, speed, gameInterval, changingDirection;
         let isPaused = false;
-        let foodEatenCount; // Contador de comidinhas
-        let lastFoodTime; // Tempo da última comidinha comida
-        let hungerTimer; // Timer para verificar fome
-        const HUNGER_TIMEOUT = 20000; // Reduzido para 20 segundos
         
         let powerUpTimer = null;
         const POWERUP_LIFESPAN = 7000;
@@ -489,7 +482,6 @@
             });
         }
         
-        // ATUALIZADO: Lógica para mostrar score pessoal ou global
         function updateHighScoreDisplays() {
             const highScoreLabel = document.getElementById('highScoreLabel');
 
@@ -524,6 +516,36 @@
             });
         }
 
+        // NOVO: Função para buscar o ranking do jogador
+        function getPlayerRank(playerId, callback) {
+            scoresRef.orderByChild('score').once('value', (snapshot) => {
+                if (!snapshot.exists()) {
+                    callback(null); // Sem scores
+                    return;
+                }
+
+                const scores = [];
+                snapshot.forEach((childSnapshot) => {
+                    scores.push({
+                        id: childSnapshot.key,
+                        score: childSnapshot.val().score
+                    });
+                });
+
+                // Ordena do maior para o menor
+                scores.sort((a, b) => b.score - a.score);
+
+                // Encontra a posição (índice + 1)
+                const rank = scores.findIndex(p => p.id === playerId) + 1;
+
+                if (rank > 0) {
+                    callback(rank);
+                } else {
+                    callback(null); // Jogador não encontrado
+                }
+            });
+        }
+
         function getGridCols() { return Math.floor(document.documentElement.clientWidth / gridSize); }
         function getGridRows() { return Math.floor(document.documentElement.clientHeight / gridSize); }
 
@@ -539,7 +561,7 @@
 
         function drawBackgroundGrid() {
             bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
-            bgCtx.fillStyle = 'rgba(63, 255, 63, 0.02)'; // Reduzida para 0.02 para sutileza, destacando a textura IA
+            bgCtx.fillStyle = 'rgba(63, 255, 63, 0.05)';
             const cols = getGridCols();
             const rows = getGridRows();
             for (let x = 0; x < cols; x++) {
@@ -590,36 +612,26 @@
 
         function drawPowerUp() {
             if (!powerUp) return;
-            const baseSize = gridSize * 0.8;
-            const pulse = Math.sin(Date.now() / 500) * 0.1 + 1; // Pulsação sutil no tamanho
-            const size = baseSize * pulse;
-            let label = ''; // Removido labels específicos para mistério
+            const size = gridSize * 0.8;
+            let label = '';
             switch (powerUp.type) {
                 case 'bonus': gameCtx.fillStyle = '#ffcc00'; label = '+5'; break;
-                case 'speedchange': gameCtx.fillStyle = '#ffff00'; break; // Cor neutra para speedchange, sem label
+                case 'speedup': gameCtx.fillStyle = '#ff5555'; label = '↑'; break;
+                case 'slowdown': gameCtx.fillStyle = '#55aaff'; label = '↓'; break;
             }
             const timeSinceSpawn = Date.now() - powerUp.spawnTime;
             let opacity = 1;
             if (timeSinceSpawn > POWERUP_LIFESPAN - 3000) {
                 opacity = (Math.sin(Date.now() / 150) + 1) / 2;
             }
-            const cx = powerUp.x * gridSize + gridSize / 2;
-            const cy = powerUp.y * gridSize + gridSize / 2;
-            gameCtx.save();
-            gameCtx.translate(cx, cy);
-            gameCtx.rotate((Date.now() / 1000) % (2 * Math.PI)); // Rotação suave
-            gameCtx.translate(-cx, -cy);
             drawStar(powerUp.x, powerUp.y, size, opacity);
-            gameCtx.restore();
-            if (label) { // Apenas para bonus
-                gameCtx.globalAlpha = opacity;
-                gameCtx.fillStyle = '#000';
-                gameCtx.font = 'bold 10px Arial';
-                gameCtx.textAlign = 'center';
-                gameCtx.textBaseline = 'middle';
-                gameCtx.fillText(label, cx, cy);
-                gameCtx.globalAlpha = 1;
-            }
+            gameCtx.globalAlpha = opacity;
+            gameCtx.fillStyle = '#000';
+            gameCtx.font = 'bold 10px Arial';
+            gameCtx.textAlign = 'center';
+            gameCtx.textBaseline = 'middle';
+            gameCtx.fillText(label, powerUp.x * gridSize + gridSize / 2, powerUp.y * gridSize + gridSize / 2);
+            gameCtx.globalAlpha = 1;
         }
 
         function showPowerUpMessage(type) {
@@ -627,9 +639,8 @@
             powerUpMessage.classList.remove('hidden');
             switch (type) {
                 case 'bonus': powerUpMessage.textContent = 'Bônus: +5 Pontos!'; powerUpMessage.classList.add('bonus'); break;
-                case 'speedchange': powerUpMessage.textContent = 'Velocidade Alterada!'; powerUpMessage.classList.add('speedchange'); break; // Mensagem genérica
-                case 'levelup': powerUpMessage.textContent = 'Velocidade Máxima Aumentada!'; powerUpMessage.classList.add('levelup'); break;
-                case 'hunger': powerUpMessage.textContent = 'Fome! A cobrinha está encolhendo!'; powerUpMessage.classList.add('hunger'); break; // Novo para fome
+                case 'speedup': powerUpMessage.textContent = 'Velocidade Aumentada!'; powerUpMessage.classList.add('speedup'); break;
+                case 'slowdown': powerUpMessage.textContent = 'Velocidade Reduzida!'; powerUpMessage.classList.add('slowdown'); break;
             }
             setTimeout(() => powerUpMessage.classList.add('hidden'), 3000);
         }
@@ -645,15 +656,11 @@
             speed = 150;
             changingDirection = false;
             isPaused = false;
-            foodEatenCount = 0;
-            lastFoodTime = Date.now(); // Inicializa tempo da última comida
             scoreDisplay.textContent = score;
             updateHighScoreDisplays();
             startMovementButton.classList.remove('hidden');
             if (powerUpTimer) clearInterval(powerUpTimer);
             powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
-            if (hungerTimer) clearInterval(hungerTimer);
-            hungerTimer = setInterval(checkHunger, 1000); // Verifica fome a cada segundo
         }
 
         function placeFood() {
@@ -678,7 +685,8 @@
             const randomType = Math.random();
             let type;
             if (randomType < 0.4) type = 'bonus';
-            else type = 'speedchange'; // Fundido speedup e slowdown em speedchange com prob. 0.6
+            else if (randomType < 0.8) type = 'speedup';
+            else type = 'slowdown';
             do {
                 newPowerUp = {
                     x: Math.floor(Math.random() * numCols),
@@ -691,20 +699,6 @@
                 (food && food.x === newPowerUp.x && food.y === newPowerUp.y)
             );
             powerUp = newPowerUp;
-        }
-
-        function checkHunger() {
-            if (isPaused || !gameInterval) return;
-            const timeSinceLastFood = Date.now() - lastFoodTime;
-            if (timeSinceLastFood > HUNGER_TIMEOUT) {
-                if (snake.length > 1) {
-                    snake.pop(); // Encolhe a cobrinha
-                    playSound('hunger');
-                    showPowerUpMessage('hunger'); // Alerta visual
-                } else {
-                    stopGame(); // Game over se não puder encolher mais
-                }
-            }
         }
 
         function gameLoop() {
@@ -761,37 +755,25 @@
                 ateSomething = true;
                 score += 1;
                 playSound('eat');
-                foodEatenCount += 1;
-                lastFoodTime = Date.now(); // Reseta o timer de fome
                 placeFood();
-                // Verifica múltiplo de 100 para aumentar velocidade
-                if (foodEatenCount % 100 === 0) {
-                    speed = Math.max(50, speed - 10);
-                    clearInterval(gameInterval);
-                    gameInterval = setInterval(gameLoop, speed);
-                    showPowerUpMessage('levelup'); // Mensagem visual para o nível up
-                }
             }
             if (powerUp && head.x === powerUp.x && head.y === powerUp.y) {
                 ateSomething = true;
                 switch (powerUp.type) {
                     case 'bonus': score += 5; playSound('powerUp'); showPowerUpMessage('bonus'); break;
-                    case 'speedchange':
-                        const isIncrease = Math.random() > 0.5; // Aleatório: >0.5 aumenta, else diminui
-                        if (isIncrease) {
-                            speed = Math.max(50, speed - 20);
-                        } else {
-                            speed = Math.min(300, speed + 20);
-                        }
-                        playSound('powerUp');
-                        showPowerUpMessage('speedchange'); // Mensagem genérica
-                        break;
+                    case 'speedup': speed = Math.max(50, speed - 20); playSound('powerUp'); showPowerUpMessage('speedup'); break;
+                    case 'slowdown': speed = Math.min(300, speed + 20); playSound('powerUp'); showPowerUpMessage('slowdown'); break;
                 }
                 clearInterval(gameInterval);
                 gameInterval = setInterval(gameLoop, speed);
                 powerUp = null;
             }
             if (ateSomething) {
+                if (food && head.x === food.x && head.y === food.y) {
+                    speed = Math.max(50, speed - 2);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(gameLoop, speed);
+                }
                 scoreDisplay.textContent = score;
                 scoreDisplay.classList.add('update');
                 setTimeout(() => scoreDisplay.classList.remove('update'), 300);
@@ -822,14 +804,12 @@
             if (isPaused) {
                 clearInterval(gameInterval);
                 clearInterval(powerUpTimer);
-                clearInterval(hungerTimer);
                 pauseScreen.classList.remove('hidden');
                 playSound('pause');
             } else {
                 pauseScreen.classList.add('hidden');
                 gameInterval = setInterval(gameLoop, speed);
                 powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
-                hungerTimer = setInterval(checkHunger, 1000);
             }
         }
         
@@ -871,21 +851,36 @@
             addEventListeners();
         }
 
+        // ATUALIZADO: Função stopGame agora busca e exibe o ranking
         function stopGame() {
             clearInterval(gameInterval);
             clearInterval(powerUpTimer);
-            clearInterval(hungerTimer);
             gameInterval = null;
             powerUpTimer = null;
-            hungerTimer = null;
             removeEventListeners();
             gameOverScreen.classList.remove('hidden');
             scoreDisplay.classList.add('hidden');
             startMovementButton.classList.add('hidden');
             finalScoreDisplay.textContent = score;
+
             if (playerName) {
                 saveTopScores(playerName, score);
             }
+
+            const playerRankDisplay = document.getElementById('playerRank');
+            const currentPId = localStorage.getItem('playerId');
+            if (currentPId) {
+                getPlayerRank(currentPId, (rank) => {
+                    if (rank) {
+                        playerRankDisplay.textContent = `#${rank}`;
+                    } else {
+                        playerRankDisplay.textContent = '--';
+                    }
+                });
+            } else {
+                 playerRankDisplay.textContent = 'N/A';
+            }
+
             updateHighScoreDisplays();
             playSound('gameOver');
         }
@@ -931,7 +926,7 @@
             else if (demoDirection === 'down' && head.y >= numRows - 1) demoDirection = 'left';
             else if (demoDirection === 'left' && head.x <= 0) demoDirection = 'up';
             else if (demoDirection === 'up' && head.y <= 0) demoDirection = 'right';
-            switch (demoDirection) {
+            switch (direction) {
                 case 'up': head.y--; break;
                 case 'down': head.y++; break;
                 case 'left': head.x--; break;
@@ -1027,7 +1022,7 @@
                                 localStorage.setItem('playerId', existingPlayerId);
                                 localStorage.setItem('playerName', formattedName);
                                 setupUI();
-                                updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o login
+                                updateHighScoreDisplays();
                             } else {
                                 showCustomAlert('Senha incorreta para este usuário!');
                             }
@@ -1041,7 +1036,7 @@
                             localStorage.setItem('playerId', newPlayerRef.key);
                             localStorage.setItem('playerName', formattedName);
                             setupUI();
-                            updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o registro
+                            updateHighScoreDisplays();
                         }
                     });
                 });
@@ -1053,7 +1048,7 @@
                     playerId = null;
                     playerPasswordInput.value = "";
                     setupUI();
-                    updateHighScoreDisplays(); // ATUALIZADO: Atualiza o placar após o logout
+                    updateHighScoreDisplays();
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
