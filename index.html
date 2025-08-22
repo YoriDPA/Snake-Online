@@ -37,7 +37,6 @@
         #backgroundCanvas {
             z-index: 1;
             background-color: #0d0d0d;
-            /* Imagem de fundo sutil com tema cyberpunk */
             background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
             opacity: 0.1;
         }
@@ -159,9 +158,9 @@
             z-index: 9;
         }
         .powerup-message.bonus { color: #ffcc00; }
-        .powerup-message.speedchange { color: #ffff00; }
-        .powerup-message.levelup { color: #ffffff; }
-        .powerup-message.hunger { color: #ff0000; }
+        .powerup-message.speedup { color: #ff5555; }
+        .powerup-message.slowdown { color: #55aaff; }
+        .powerup-message.shield { color: #00ffff; }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
@@ -305,6 +304,36 @@
             padding: 5px;
             border-bottom: 1px solid #3fff3f;
         }
+        .color-picker-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .color-picker-container label {
+            color: #fff;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .color-picker {
+            display: flex;
+            gap: 10px;
+        }
+        .color-dot {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s ease;
+        }
+        .color-dot:hover {
+            transform: scale(1.1);
+        }
+        .color-dot.active {
+            border-color: #fff;
+            box-shadow: 0 0 10px #fff;
+        }
     </style>
 </head>
 <body>
@@ -328,6 +357,16 @@
                     <button id="submitNameButton" class="game-button">Login / Registrar</button>
                 </div>
                 <div id="loggedInSection" style="display: none; text-align: center;">
+                    <div class="color-picker-container">
+                        <label>Escolha sua cor:</label>
+                        <div id="colorPicker" class="color-picker">
+                            <span class="color-dot active" data-color="#3fff3f" style="background-color: #3fff3f;"></span>
+                            <span class="color-dot" data-color="#ff5555" style="background-color: #ff5555;"></span>
+                            <span class="color-dot" data-color="#55aaff" style="background-color: #55aaff;"></span>
+                            <span class="color-dot" data-color="#ffcc00" style="background-color: #ffcc00;"></span>
+                            <span class="color-dot" data-color="#ff88ff" style="background-color: #ff88ff;"></span>
+                        </div>
+                    </div>
                     <button id="startButton" class="game-button">Iniciar</button>
                     <button id="adminPanelButton" class="game-button secondary" style="display: none;">Jogadores Online</button>
                     <button id="changeUserButton" class="game-button secondary">Trocar de Usuário</button>
@@ -424,6 +463,7 @@
         const nameInputSection = document.getElementById('nameInputSection');
         const loggedInSection = document.getElementById('loggedInSection');
         const changeUserButton = document.getElementById('changeUserButton');
+        const colorPicker = document.getElementById('colorPicker');
         
         const adminPanel = document.getElementById('adminPanel');
         const adminPanelButton = document.getElementById('adminPanelButton');
@@ -433,11 +473,17 @@
 
         let playerName = localStorage.getItem('playerName') || null;
         let playerId = localStorage.getItem('playerId') || null;
+        let playerColor = '#3fff3f';
         let isSoundOn = true;
         let audioReady = false;
         let isAdmin = false;
         const ADMIN_USERNAME = "Admin";
         const ADMIN_PASSWORD = "88645912";
+
+        let isShielded = false;
+        let shieldTimer = null;
+        let particles = [];
+        let musicLoop;
 
         const synth = new Tone.FMSynth({
             harmonicity: 8,
@@ -456,13 +502,13 @@
                         synth.triggerAttackRelease("E5", "16n", now + 0.07);
                         synth.triggerAttackRelease("G5", "16n", now + 0.14);
                         break;
+                    case 'shieldBreak': synth.triggerAttackRelease("A2", "8n", now); break;
                     case 'pause': synth.triggerAttackRelease("G4", "16n", now); break;
                     case 'gameOver':
                         synth.triggerAttackRelease("G3", "8n", now);
                         synth.triggerAttackRelease("E3", "8n", now + 0.1);
                         synth.triggerAttackRelease("C3", "8n", now + 0.2);
                         break;
-                    case 'hunger': synth.triggerAttackRelease("C3", "8n", now); break;
                 }
             } catch (e) { console.error("Erro ao tocar som com Tone.js:", e); }
         }
@@ -477,10 +523,6 @@
         const gridSize = 20;
         let snake, food, powerUp, direction, score, speed, gameInterval, changingDirection;
         let isPaused = false;
-        let foodEatenCount;
-        let lastFoodTime;
-        let hungerTimer;
-        const HUNGER_TIMEOUT = 20000;
         
         let powerUpTimer = null;
         const POWERUP_LIFESPAN = 7000;
@@ -604,11 +646,34 @@
             }
         }
 
-        function drawOnGameCanvas(x, y, color) {
-            gameCtx.fillStyle = color;
+        function darkenColor(hex, percent) {
+            hex = hex.replace(/^\s*#|\s*$/g, '');
+            if (hex.length == 3) {
+                hex = hex.replace(/(.)/g, '$1$1');
+            }
+            let r = parseInt(hex.substr(0, 2), 16),
+                g = parseInt(hex.substr(2, 2), 16),
+                b = parseInt(hex.substr(4, 2), 16);
+
+            return '#' +
+               ((0|(1<<8) + r * (1-percent/100)).toString(16)).substr(1) +
+               ((0|(1<<8) + g * (1-percent/100)).toString(16)).substr(1) +
+               ((0|(1<<8) + b * (1-percent/100)).toString(16)).substr(1);
+        }
+
+        function drawOnGameCanvas(x, y, isHead) {
+            const color = isHead ? playerColor : darkenColor(playerColor, 30);
+            const grad = gameCtx.createLinearGradient(x * gridSize, y * gridSize, (x + 1) * gridSize, (y + 1) * gridSize);
+            grad.addColorStop(0, color);
+            grad.addColorStop(1, darkenColor(color, 50));
+            gameCtx.fillStyle = grad;
+
+            gameCtx.shadowColor = color;
+            gameCtx.shadowBlur = 10;
+
             gameCtx.fillRect(x * gridSize, y * gridSize, gridSize, gridSize);
-            gameCtx.strokeStyle = '#000';
-            gameCtx.strokeRect(x * gridSize, y * gridSize, gridSize, gridSize);
+
+            gameCtx.shadowBlur = 0;
         }
 
         function drawStar(x, y, size, opacity = 1) {
@@ -634,45 +699,40 @@
         
         function drawFood() {
             if (!food) return;
-            const size = gridSize * 0.8;
+            const size = gridSize * (0.8 + Math.sin(Date.now() / 200) * 0.1);
             gameCtx.fillStyle = '#ff3333';
+            gameCtx.shadowColor = '#ff3333';
+            gameCtx.shadowBlur = 15;
             const cx = food.x * gridSize + gridSize / 2;
             const cy = food.y * gridSize + gridSize / 2;
             gameCtx.beginPath();
             gameCtx.arc(cx, cy, size / 2, 0, 2 * Math.PI);
             gameCtx.fill();
+            gameCtx.shadowBlur = 0;
         }
 
         function drawPowerUp() {
             if (!powerUp) return;
-            const baseSize = gridSize * 0.8;
-            const pulse = Math.sin(Date.now() / 200) * 0.1 + 1;
-            const size = baseSize * pulse;
-            let label = '';
+            const size = gridSize * 0.8;
+            let icon;
             switch (powerUp.type) {
-                case 'bonus': gameCtx.fillStyle = '#ffcc00'; label = '+5'; break;
-                case 'speedchange': gameCtx.fillStyle = '#ffff00'; break;
+                case 'bonus': gameCtx.fillStyle = '#ffcc00'; icon = '💰'; break;
+                case 'speedup': gameCtx.fillStyle = '#ff5555'; icon = '⚡️'; break;
+                case 'slowdown': gameCtx.fillStyle = '#55aaff'; icon = '🐢'; break;
+                case 'shield': gameCtx.fillStyle = '#00ffff'; icon = '🛡️'; break;
             }
             const timeSinceSpawn = Date.now() - powerUp.spawnTime;
             let opacity = 1;
             if (timeSinceSpawn > POWERUP_LIFESPAN - 3000) {
                 opacity = (Math.sin(Date.now() / 150) + 1) / 2;
             }
-            const cx = powerUp.x * gridSize + gridSize / 2;
-            const cy = powerUp.y * gridSize + gridSize / 2;
-            gameCtx.save();
-            gameCtx.translate(cx, cy);
-            gameCtx.rotate((Date.now() / 1000) % (2 * Math.PI));
-            gameCtx.translate(-cx, -cy);
             drawStar(powerUp.x, powerUp.y, size, opacity);
-            gameCtx.restore();
-            if (label) {
+            if (icon) {
                 gameCtx.globalAlpha = opacity;
-                gameCtx.fillStyle = '#000';
-                gameCtx.font = 'bold 10px Arial';
+                gameCtx.font = `${gridSize * 0.6}px sans-serif`;
                 gameCtx.textAlign = 'center';
                 gameCtx.textBaseline = 'middle';
-                gameCtx.fillText(label, cx, cy);
+                gameCtx.fillText(icon, powerUp.x * gridSize + gridSize / 2, powerUp.y * gridSize + gridSize / 2);
                 gameCtx.globalAlpha = 1;
             }
         }
@@ -682,9 +742,9 @@
             powerUpMessage.classList.remove('hidden');
             switch (type) {
                 case 'bonus': powerUpMessage.textContent = 'Bônus: +5 Pontos!'; powerUpMessage.classList.add('bonus'); break;
-                case 'speedchange': powerUpMessage.textContent = 'Velocidade Alterada!'; powerUpMessage.classList.add('speedchange'); break;
-                case 'levelup': powerUpMessage.textContent = 'Nível Aumentado!'; powerUpMessage.classList.add('levelup'); break;
-                case 'hunger': powerUpMessage.textContent = 'Fome!'; powerUpMessage.classList.add('hunger'); break;
+                case 'speedup': powerUpMessage.textContent = 'Velocidade Aumentada!'; powerUpMessage.classList.add('speedup'); break;
+                case 'slowdown': powerUpMessage.textContent = 'Velocidade Reduzida!'; powerUpMessage.classList.add('slowdown'); break;
+                case 'shield': powerUpMessage.textContent = 'Escudo Ativado!'; powerUpMessage.classList.add('shield'); break;
             }
             setTimeout(() => powerUpMessage.classList.add('hidden'), 3000);
         }
@@ -700,15 +760,13 @@
             speed = 150;
             changingDirection = false;
             isPaused = false;
-            foodEatenCount = 0;
-            lastFoodTime = Date.now();
+            isShielded = false;
+            if (shieldTimer) clearTimeout(shieldTimer);
             scoreDisplay.textContent = score;
             updateHighScoreDisplays();
             startMovementButton.classList.remove('hidden');
             if (powerUpTimer) clearInterval(powerUpTimer);
             powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
-            if (hungerTimer) clearInterval(hungerTimer);
-            hungerTimer = setInterval(checkHunger, 1000);
         }
 
         function placeFood() {
@@ -732,8 +790,10 @@
             let newPowerUp;
             const randomType = Math.random();
             let type;
-            if (randomType < 0.4) type = 'bonus';
-            else type = 'speedchange';
+            if (randomType < 0.35) type = 'bonus';
+            else if (randomType < 0.6) type = 'speedup';
+            else if (randomType < 0.85) type = 'slowdown';
+            else type = 'shield';
             do {
                 newPowerUp = {
                     x: Math.floor(Math.random() * numCols),
@@ -746,21 +806,6 @@
                 (food && food.x === newPowerUp.x && food.y === newPowerUp.y)
             );
             powerUp = newPowerUp;
-        }
-
-        function checkHunger() {
-            if (isPaused || !gameInterval) return;
-            const timeSinceLastFood = Date.now() - lastFoodTime;
-            if (timeSinceLastFood > HUNGER_TIMEOUT) {
-                if (snake.length > 1) {
-                    snake.pop();
-                    playSound('hunger');
-                    showPowerUpMessage('hunger');
-                    lastFoodTime = Date.now(); // Reseta o timer para não encolher tudo de uma vez
-                } else {
-                    stopGame();
-                }
-            }
         }
 
         function gameLoop() {
@@ -782,21 +827,75 @@
             drawFood();
             drawPowerUp();
             snake.forEach((segment, index) => {
-                const color = index === 0 ? '#3fff3f' : '#2cae2c';
-                drawOnGameCanvas(segment.x, segment.y, color);
+                drawOnGameCanvas(segment.x, segment.y, index === 0);
+                if (index === 0) {
+                    gameCtx.fillStyle = 'black';
+                    const eyeSize = gridSize / 5;
+                    if (direction === 'up' || direction === 'down') {
+                        gameCtx.fillRect(segment.x * gridSize + eyeSize, segment.y * gridSize + eyeSize * 2, eyeSize, eyeSize);
+                        gameCtx.fillRect(segment.x * gridSize + eyeSize * 3, segment.y * gridSize + eyeSize * 2, eyeSize, eyeSize);
+                    } else {
+                        gameCtx.fillRect(segment.x * gridSize + eyeSize * 2, segment.y * gridSize + eyeSize, eyeSize, eyeSize);
+                        gameCtx.fillRect(segment.x * gridSize + eyeSize * 2, segment.y * gridSize + eyeSize * 3, eyeSize, eyeSize);
+                    }
+                }
+                if (index === 0 && isShielded) {
+                    gameCtx.strokeStyle = '#00ffff';
+                    gameCtx.lineWidth = 3;
+                    gameCtx.strokeRect(segment.x * gridSize + 1.5, segment.y * gridSize + 1.5, gridSize - 3, gridSize - 3);
+                }
+            });
+            particles.forEach((p, index) => {
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    particles.splice(index, 1);
+                } else {
+                    gameCtx.globalAlpha = p.alpha;
+                    gameCtx.fillStyle = p.color;
+                    gameCtx.fillRect(p.x, p.y, 2, 2);
+                    gameCtx.globalAlpha = 1;
+                }
             });
         }
 
         function isGameOver() {
             const head = snake[0];
-            
+            const numCols = getGridCols();
+            const numRows = getGridRows();
+
+            let collision = false;
+
+            if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
+                collision = true;
+            }
             for (let i = 1; i < snake.length; i++) {
                 if (head.x === snake[i].x && head.y === snake[i].y) {
-                    return !isAdmin; 
+                    collision = true;
+                    break;
                 }
             }
 
+            if (collision) {
+                if (isShielded) {
+                    isShielded = false;
+                    clearTimeout(shieldTimer);
+                    playSound('shieldBreak');
+                    return false;
+                }
+                return true;
+            }
             return false;
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x * gridSize + gridSize / 2 + (Math.random() - 0.5) * 10,
+                    y: y * gridSize + gridSize / 2 + (Math.random() - 0.5) * 10,
+                    color: color,
+                    alpha: 1
+                });
+            }
         }
 
         function moveSnake() {
@@ -808,52 +907,28 @@
                 case 'left': head.x--; break;
                 case 'right': head.x++; break;
             }
-
-            if (isAdmin) {
-                const numCols = getGridCols();
-                const numRows = getGridRows();
-                if (head.x < 0) head.x = numCols - 1;
-                if (head.x >= numCols) head.x = 0;
-                if (head.y < 0) head.y = numRows - 1;
-                if (head.y >= numRows) head.y = 0;
-            } else {
-                const numCols = getGridCols();
-                const numRows = getGridRows();
-                if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
-                    stopGame();
-                    return;
-                }
-            }
-
             snake.unshift(head);
             let ateSomething = false;
             if (food && head.x === food.x && head.y === food.y) {
                 ateSomething = true;
                 score += 1;
                 playSound('eat');
-                foodEatenCount++;
-                lastFoodTime = Date.now();
+                createParticles(food.x, food.y, '#ff3333');
                 placeFood();
-                if (foodEatenCount % 10 === 0) {
-                    speed = Math.max(50, speed - 5);
-                    clearInterval(gameInterval);
-                    gameInterval = setInterval(gameLoop, speed);
-                    showPowerUpMessage('levelup');
-                }
             }
             if (powerUp && head.x === powerUp.x && head.y === powerUp.y) {
                 ateSomething = true;
+                createParticles(powerUp.x, powerUp.y, '#ffff00');
                 switch (powerUp.type) {
                     case 'bonus': score += 5; playSound('powerUp'); showPowerUpMessage('bonus'); break;
-                    case 'speedchange':
-                        const isIncrease = Math.random() > 0.5;
-                        if (isIncrease) {
-                            speed = Math.max(50, speed - 20);
-                        } else {
-                            speed = Math.min(300, speed + 20);
-                        }
+                    case 'speedup': speed = Math.max(50, speed - 20); playSound('powerUp'); showPowerUpMessage('speedup'); break;
+                    case 'slowdown': speed = Math.min(300, speed + 20); playSound('powerUp'); showPowerUpMessage('slowdown'); break;
+                    case 'shield':
+                        isShielded = true;
+                        if (shieldTimer) clearTimeout(shieldTimer);
+                        shieldTimer = setTimeout(() => { isShielded = false; }, 5000);
                         playSound('powerUp');
-                        showPowerUpMessage('speedchange');
+                        showPowerUpMessage('shield');
                         break;
                 }
                 clearInterval(gameInterval);
@@ -861,6 +936,11 @@
                 powerUp = null;
             }
             if (ateSomething) {
+                if (food && head.x === food.x && head.y === food.y) {
+                    speed = Math.max(50, speed - 2);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(gameLoop, speed);
+                }
                 scoreDisplay.textContent = score;
                 scoreDisplay.classList.add('update');
                 setTimeout(() => scoreDisplay.classList.remove('update'), 300);
@@ -891,14 +971,12 @@
             if (isPaused) {
                 clearInterval(gameInterval);
                 clearInterval(powerUpTimer);
-                clearInterval(hungerTimer);
                 pauseScreen.classList.remove('hidden');
                 playSound('pause');
             } else {
                 pauseScreen.classList.add('hidden');
                 gameInterval = setInterval(gameLoop, speed);
                 powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
-                hungerTimer = setInterval(checkHunger, 1000);
             }
         }
         
@@ -943,10 +1021,8 @@
         function stopGame() {
             clearInterval(gameInterval);
             clearInterval(powerUpTimer);
-            clearInterval(hungerTimer);
             gameInterval = null;
             powerUpTimer = null;
-            hungerTimer = null;
             removeEventListeners();
             gameOverScreen.classList.remove('hidden');
             scoreDisplay.classList.add('hidden');
