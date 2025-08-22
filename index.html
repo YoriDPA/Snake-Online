@@ -37,6 +37,9 @@
         #backgroundCanvas {
             z-index: 1;
             background-color: #0d0d0d;
+            /* Imagem de fundo sutil com tema cyberpunk */
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+            opacity: 0.1;
         }
         #gameCanvas {
             z-index: 2;
@@ -55,7 +58,7 @@
             justify-content: center;
             pointer-events: none;
         }
-        .start-screen-content, .game-over-content, .pause-screen-content {
+        .start-screen-content, .game-over-content, .pause-screen-content, .admin-panel-content {
             pointer-events: all;
             text-align: center;
             display: flex;
@@ -98,7 +101,7 @@
             background-color: #3fff3f;
             color: #000;
         }
-        .game-over-dialog, .pause-dialog {
+        .game-over-dialog, .pause-dialog, .admin-dialog {
             background-color: rgba(0, 0, 0, 0.85);
             padding: 30px 40px;
             border-radius: 15px;
@@ -107,7 +110,7 @@
             width: 90%;
             max-width: 500px;
         }
-        .game-over-dialog h1, .pause-dialog h1 {
+        .game-over-dialog h1, .pause-dialog h1, .admin-dialog h1 {
             font-size: 2rem;
             margin-bottom: 20px;
             color: #3fff3f;
@@ -156,8 +159,9 @@
             z-index: 9;
         }
         .powerup-message.bonus { color: #ffcc00; }
-        .powerup-message.speedup { color: #ff5555; }
-        .powerup-message.slowdown { color: #55aaff; }
+        .powerup-message.speedchange { color: #ffff00; }
+        .powerup-message.levelup { color: #ffffff; }
+        .powerup-message.hunger { color: #ff0000; }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
@@ -289,6 +293,18 @@
         .whatsapp-content i {
             font-size: 1.5rem;
         }
+        #allPlayersList {
+            list-style: none;
+            padding: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+            color: #fff;
+        }
+        #allPlayersList li {
+            padding: 5px;
+            border-bottom: 1px solid #3fff3f;
+        }
     </style>
 </head>
 <body>
@@ -313,11 +329,12 @@
                 </div>
                 <div id="loggedInSection" style="display: none; text-align: center;">
                     <button id="startButton" class="game-button">Iniciar</button>
+                    <button id="adminPanelButton" class="game-button secondary" style="display: none;">Jogadores Online</button>
                     <button id="changeUserButton" class="game-button secondary">Trocar de Usuário</button>
                 </div>
-                <p class="signature">Criado por YoriDPA</p>
+                <p class="signature" id="signature">Criado por YoriDPA</p>
 
-                <a href="https://wa.me/5527996162221" target="_blank" class="whatsapp-link">
+                <a href="https://wa.me/5527996162221" target="_blank" class="whatsapp-link" id="whatsappLink">
                     <div class="whatsapp-content">
                         <span>Dúvidas ou sugestões?</span>
                         <i class="fa-brands fa-whatsapp"></i>
@@ -329,7 +346,6 @@
                 <div class="game-over-dialog">
                     <h1>FIM DE JOGO</h1>
                     <p class="final-score">Score: <span id="finalScore"></span></p>
-                    <!-- NOVO: Campo para mostrar a posição no ranking -->
                     <p class="player-rank">Sua Posição: <span id="playerRank">--</span></p>
                     <p>Recorde Global: <span id="gameOverHighScore"></span></p>
                     <button id="restartButton" class="game-button">Jogar Novamente</button>
@@ -341,6 +357,14 @@
                 <div class="pause-dialog">
                     <h1>PAUSADO</h1>
                     <button id="resumeButton" class="game-button">Continuar</button>
+                </div>
+            </div>
+            
+            <div id="adminPanel" class="admin-panel-content hidden">
+                <div class="admin-dialog">
+                    <h1>Jogadores Online</h1>
+                    <ul id="allPlayersList"><li>Carregando...</li></ul>
+                    <button id="closeAdminPanelButton" class="game-button secondary">Fechar</button>
                 </div>
             </div>
         </div>
@@ -369,8 +393,8 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const scoresRef = database.ref('scores');
+        const statusRef = database.ref('status');
 
-        // ... (o resto do código inicial é o mesmo)
         const gameContainer = document.getElementById('game-container');
         const backgroundCanvas = document.getElementById('backgroundCanvas');
         const bgCtx = backgroundCanvas.getContext('2d');
@@ -400,12 +424,20 @@
         const nameInputSection = document.getElementById('nameInputSection');
         const loggedInSection = document.getElementById('loggedInSection');
         const changeUserButton = document.getElementById('changeUserButton');
+        
+        const adminPanel = document.getElementById('adminPanel');
+        const adminPanelButton = document.getElementById('adminPanelButton');
+        const closeAdminPanelButton = document.getElementById('closeAdminPanelButton');
+        const allPlayersList = document.getElementById('allPlayersList');
 
 
         let playerName = localStorage.getItem('playerName') || null;
         let playerId = localStorage.getItem('playerId') || null;
         let isSoundOn = true;
         let audioReady = false;
+        let isAdmin = false;
+        const ADMIN_USERNAME = "Admin";
+        const ADMIN_PASSWORD = "88645912";
 
         const synth = new Tone.FMSynth({
             harmonicity: 8,
@@ -430,6 +462,7 @@
                         synth.triggerAttackRelease("E3", "8n", now + 0.1);
                         synth.triggerAttackRelease("C3", "8n", now + 0.2);
                         break;
+                    case 'hunger': synth.triggerAttackRelease("C3", "8n", now); break;
                 }
             } catch (e) { console.error("Erro ao tocar som com Tone.js:", e); }
         }
@@ -444,6 +477,10 @@
         const gridSize = 20;
         let snake, food, powerUp, direction, score, speed, gameInterval, changingDirection;
         let isPaused = false;
+        let foodEatenCount;
+        let lastFoodTime;
+        let hungerTimer;
+        const HUNGER_TIMEOUT = 20000;
         
         let powerUpTimer = null;
         const POWERUP_LIFESPAN = 7000;
@@ -471,7 +508,7 @@
 
         function saveTopScores(name, newScore) {
             const currentPId = localStorage.getItem('playerId');
-            if (!currentPId || !name || newScore < 0) return;
+            if (!currentPId || !name || newScore < 0 || isAdmin) return;
             const userScoreRef = database.ref('scores/' + currentPId);
             
             userScoreRef.child('score').once('value', (snapshot) => {
@@ -502,7 +539,7 @@
                 }
 
                 const currentPId = localStorage.getItem('playerId');
-                if (currentPId) {
+                if (currentPId && !isAdmin) {
                     const userScoreRef = database.ref('scores/' + currentPId + '/score');
                     userScoreRef.once('value', (snapshot) => {
                         const userBestScore = snapshot.val() || 0;
@@ -516,11 +553,10 @@
             });
         }
 
-        // NOVO: Função para buscar o ranking do jogador
         function getPlayerRank(playerId, callback) {
             scoresRef.orderByChild('score').once('value', (snapshot) => {
                 if (!snapshot.exists()) {
-                    callback(null); // Sem scores
+                    callback(null);
                     return;
                 }
 
@@ -532,16 +568,13 @@
                     });
                 });
 
-                // Ordena do maior para o menor
                 scores.sort((a, b) => b.score - a.score);
-
-                // Encontra a posição (índice + 1)
                 const rank = scores.findIndex(p => p.id === playerId) + 1;
 
                 if (rank > 0) {
                     callback(rank);
                 } else {
-                    callback(null); // Jogador não encontrado
+                    callback(null);
                 }
             });
         }
@@ -612,26 +645,36 @@
 
         function drawPowerUp() {
             if (!powerUp) return;
-            const size = gridSize * 0.8;
+            const baseSize = gridSize * 0.8;
+            const pulse = Math.sin(Date.now() / 200) * 0.1 + 1;
+            const size = baseSize * pulse;
             let label = '';
             switch (powerUp.type) {
                 case 'bonus': gameCtx.fillStyle = '#ffcc00'; label = '+5'; break;
-                case 'speedup': gameCtx.fillStyle = '#ff5555'; label = '↑'; break;
-                case 'slowdown': gameCtx.fillStyle = '#55aaff'; label = '↓'; break;
+                case 'speedchange': gameCtx.fillStyle = '#ffff00'; break;
             }
             const timeSinceSpawn = Date.now() - powerUp.spawnTime;
             let opacity = 1;
             if (timeSinceSpawn > POWERUP_LIFESPAN - 3000) {
                 opacity = (Math.sin(Date.now() / 150) + 1) / 2;
             }
+            const cx = powerUp.x * gridSize + gridSize / 2;
+            const cy = powerUp.y * gridSize + gridSize / 2;
+            gameCtx.save();
+            gameCtx.translate(cx, cy);
+            gameCtx.rotate((Date.now() / 1000) % (2 * Math.PI));
+            gameCtx.translate(-cx, -cy);
             drawStar(powerUp.x, powerUp.y, size, opacity);
-            gameCtx.globalAlpha = opacity;
-            gameCtx.fillStyle = '#000';
-            gameCtx.font = 'bold 10px Arial';
-            gameCtx.textAlign = 'center';
-            gameCtx.textBaseline = 'middle';
-            gameCtx.fillText(label, powerUp.x * gridSize + gridSize / 2, powerUp.y * gridSize + gridSize / 2);
-            gameCtx.globalAlpha = 1;
+            gameCtx.restore();
+            if (label) {
+                gameCtx.globalAlpha = opacity;
+                gameCtx.fillStyle = '#000';
+                gameCtx.font = 'bold 10px Arial';
+                gameCtx.textAlign = 'center';
+                gameCtx.textBaseline = 'middle';
+                gameCtx.fillText(label, cx, cy);
+                gameCtx.globalAlpha = 1;
+            }
         }
 
         function showPowerUpMessage(type) {
@@ -639,8 +682,9 @@
             powerUpMessage.classList.remove('hidden');
             switch (type) {
                 case 'bonus': powerUpMessage.textContent = 'Bônus: +5 Pontos!'; powerUpMessage.classList.add('bonus'); break;
-                case 'speedup': powerUpMessage.textContent = 'Velocidade Aumentada!'; powerUpMessage.classList.add('speedup'); break;
-                case 'slowdown': powerUpMessage.textContent = 'Velocidade Reduzida!'; powerUpMessage.classList.add('slowdown'); break;
+                case 'speedchange': powerUpMessage.textContent = 'Velocidade Alterada!'; powerUpMessage.classList.add('speedchange'); break;
+                case 'levelup': powerUpMessage.textContent = 'Nível Aumentado!'; powerUpMessage.classList.add('levelup'); break;
+                case 'hunger': powerUpMessage.textContent = 'Fome!'; powerUpMessage.classList.add('hunger'); break;
             }
             setTimeout(() => powerUpMessage.classList.add('hidden'), 3000);
         }
@@ -656,11 +700,15 @@
             speed = 150;
             changingDirection = false;
             isPaused = false;
+            foodEatenCount = 0;
+            lastFoodTime = Date.now();
             scoreDisplay.textContent = score;
             updateHighScoreDisplays();
             startMovementButton.classList.remove('hidden');
             if (powerUpTimer) clearInterval(powerUpTimer);
             powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
+            if (hungerTimer) clearInterval(hungerTimer);
+            hungerTimer = setInterval(checkHunger, 1000);
         }
 
         function placeFood() {
@@ -685,8 +733,7 @@
             const randomType = Math.random();
             let type;
             if (randomType < 0.4) type = 'bonus';
-            else if (randomType < 0.8) type = 'speedup';
-            else type = 'slowdown';
+            else type = 'speedchange';
             do {
                 newPowerUp = {
                     x: Math.floor(Math.random() * numCols),
@@ -699,6 +746,21 @@
                 (food && food.x === newPowerUp.x && food.y === newPowerUp.y)
             );
             powerUp = newPowerUp;
+        }
+
+        function checkHunger() {
+            if (isPaused || !gameInterval) return;
+            const timeSinceLastFood = Date.now() - lastFoodTime;
+            if (timeSinceLastFood > HUNGER_TIMEOUT) {
+                if (snake.length > 1) {
+                    snake.pop();
+                    playSound('hunger');
+                    showPowerUpMessage('hunger');
+                    lastFoodTime = Date.now(); // Reseta o timer para não encolher tudo de uma vez
+                } else {
+                    stopGame();
+                }
+            }
         }
 
         function gameLoop() {
@@ -727,16 +789,13 @@
 
         function isGameOver() {
             const head = snake[0];
-            const numCols = getGridCols();
-            const numRows = getGridRows();
-            if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
-                return true;
-            }
+            
             for (let i = 1; i < snake.length; i++) {
                 if (head.x === snake[i].x && head.y === snake[i].y) {
-                    return true;
+                    return !isAdmin; 
                 }
             }
+
             return false;
         }
 
@@ -749,31 +808,59 @@
                 case 'left': head.x--; break;
                 case 'right': head.x++; break;
             }
+
+            if (isAdmin) {
+                const numCols = getGridCols();
+                const numRows = getGridRows();
+                if (head.x < 0) head.x = numCols - 1;
+                if (head.x >= numCols) head.x = 0;
+                if (head.y < 0) head.y = numRows - 1;
+                if (head.y >= numRows) head.y = 0;
+            } else {
+                const numCols = getGridCols();
+                const numRows = getGridRows();
+                if (head.x < 0 || head.x >= numCols || head.y < 0 || head.y >= numRows) {
+                    stopGame();
+                    return;
+                }
+            }
+
             snake.unshift(head);
             let ateSomething = false;
             if (food && head.x === food.x && head.y === food.y) {
                 ateSomething = true;
                 score += 1;
                 playSound('eat');
+                foodEatenCount++;
+                lastFoodTime = Date.now();
                 placeFood();
+                if (foodEatenCount % 10 === 0) {
+                    speed = Math.max(50, speed - 5);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(gameLoop, speed);
+                    showPowerUpMessage('levelup');
+                }
             }
             if (powerUp && head.x === powerUp.x && head.y === powerUp.y) {
                 ateSomething = true;
                 switch (powerUp.type) {
                     case 'bonus': score += 5; playSound('powerUp'); showPowerUpMessage('bonus'); break;
-                    case 'speedup': speed = Math.max(50, speed - 20); playSound('powerUp'); showPowerUpMessage('speedup'); break;
-                    case 'slowdown': speed = Math.min(300, speed + 20); playSound('powerUp'); showPowerUpMessage('slowdown'); break;
+                    case 'speedchange':
+                        const isIncrease = Math.random() > 0.5;
+                        if (isIncrease) {
+                            speed = Math.max(50, speed - 20);
+                        } else {
+                            speed = Math.min(300, speed + 20);
+                        }
+                        playSound('powerUp');
+                        showPowerUpMessage('speedchange');
+                        break;
                 }
                 clearInterval(gameInterval);
                 gameInterval = setInterval(gameLoop, speed);
                 powerUp = null;
             }
             if (ateSomething) {
-                if (food && head.x === food.x && head.y === food.y) {
-                    speed = Math.max(50, speed - 2);
-                    clearInterval(gameInterval);
-                    gameInterval = setInterval(gameLoop, speed);
-                }
                 scoreDisplay.textContent = score;
                 scoreDisplay.classList.add('update');
                 setTimeout(() => scoreDisplay.classList.remove('update'), 300);
@@ -804,12 +891,14 @@
             if (isPaused) {
                 clearInterval(gameInterval);
                 clearInterval(powerUpTimer);
+                clearInterval(hungerTimer);
                 pauseScreen.classList.remove('hidden');
                 playSound('pause');
             } else {
                 pauseScreen.classList.add('hidden');
                 gameInterval = setInterval(gameLoop, speed);
                 powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
+                hungerTimer = setInterval(checkHunger, 1000);
             }
         }
         
@@ -851,12 +940,13 @@
             addEventListeners();
         }
 
-        // ATUALIZADO: Função stopGame agora busca e exibe o ranking
         function stopGame() {
             clearInterval(gameInterval);
             clearInterval(powerUpTimer);
+            clearInterval(hungerTimer);
             gameInterval = null;
             powerUpTimer = null;
+            hungerTimer = null;
             removeEventListeners();
             gameOverScreen.classList.remove('hidden');
             scoreDisplay.classList.add('hidden');
@@ -942,17 +1032,61 @@
             });
         }
 
+        function setupPresence() {
+            const currentPId = localStorage.getItem('playerId');
+            const currentPName = localStorage.getItem('playerName');
+            if (!currentPId || !currentPName) return;
+
+            const userStatusRef = database.ref('/status/' + currentPId);
+            const isOnline = {
+                name: currentPName,
+                online: true,
+                last_changed: firebase.database.ServerValue.TIMESTAMP,
+            };
+            const isOffline = {
+                name: currentPName,
+                online: false,
+                last_changed: firebase.database.ServerValue.TIMESTAMP,
+            };
+
+            database.ref('.info/connected').on('value', (snapshot) => {
+                if (snapshot.val() === false) {
+                    return;
+                }
+                userStatusRef.onDisconnect().set(isOffline).then(() => {
+                    userStatusRef.set(isOnline);
+                });
+            });
+        }
+
         function setupUI() {
             playerName = localStorage.getItem('playerName');
             playerId = localStorage.getItem('playerId');
+            const signature = document.getElementById('signature');
+            const whatsappLink = document.getElementById('whatsappLink');
+
             if (playerName && playerId) {
                 nameInputSection.style.display = 'none';
                 loggedInSection.style.display = 'flex';
                 loggedInSection.style.flexDirection = 'column';
                 loggedInSection.style.alignItems = 'center';
+                
+                if (isAdmin) {
+                    adminPanelButton.style.display = 'block';
+                    signature.style.display = 'none';
+                    whatsappLink.style.display = 'none';
+                } else {
+                    adminPanelButton.style.display = 'none';
+                    signature.style.display = 'block';
+                    whatsappLink.style.display = 'block';
+                }
             } else {
                 nameInputSection.style.display = 'block';
                 loggedInSection.style.display = 'none';
+                adminPanelButton.style.display = 'none';
+                isAdmin = false;
+                signature.style.display = 'block';
+                whatsappLink.style.display = 'block';
             }
         }
 
@@ -1010,7 +1144,30 @@
                     }
 
                     const formattedName = formatPlayerName(rawName);
-                    const hashedPassword = hashPassword(password);
+                    
+                    if (formattedName === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                        isAdmin = true;
+                        scoresRef.orderByChild('name').equalTo(ADMIN_USERNAME).once('value', snapshot => {
+                            let adminPlayerId;
+                            if (snapshot.exists()) {
+                                adminPlayerId = Object.keys(snapshot.val())[0];
+                            } else {
+                                const newAdminRef = scoresRef.push();
+                                newAdminRef.set({
+                                    name: ADMIN_USERNAME,
+                                    password: hashPassword(password),
+                                    score: 0
+                                });
+                                adminPlayerId = newAdminRef.key;
+                            }
+                            localStorage.setItem('playerId', adminPlayerId);
+                            localStorage.setItem('playerName', formattedName);
+                            setupUI();
+                            updateHighScoreDisplays();
+                            setupPresence();
+                        });
+                        return;
+                    }
 
                     scoresRef.orderByChild('name').equalTo(formattedName).once('value', snapshot => {
                         if (snapshot.exists()) {
@@ -1018,11 +1175,13 @@
                             const existingPlayerId = Object.keys(playerData)[0];
                             const existingPlayer = playerData[existingPlayerId];
 
-                            if (existingPlayer.password === hashedPassword) {
+                            if (existingPlayer.password === hashPassword(password)) {
                                 localStorage.setItem('playerId', existingPlayerId);
                                 localStorage.setItem('playerName', formattedName);
+                                isAdmin = false;
                                 setupUI();
                                 updateHighScoreDisplays();
+                                setupPresence();
                             } else {
                                 showCustomAlert('Senha incorreta para este usuário!');
                             }
@@ -1030,25 +1189,62 @@
                             const newPlayerRef = scoresRef.push();
                             newPlayerRef.set({
                                 name: formattedName,
-                                password: hashedPassword,
+                                password: hashPassword(password),
                                 score: 0
                             });
                             localStorage.setItem('playerId', newPlayerRef.key);
                             localStorage.setItem('playerName', formattedName);
+                            isAdmin = false;
                             setupUI();
                             updateHighScoreDisplays();
+                            setupPresence();
                         }
                     });
                 });
                 
                 changeUserButton.addEventListener('click', () => {
+                    const currentPId = localStorage.getItem('playerId');
+                    if(currentPId) {
+                        database.ref('/status/' + currentPId).remove();
+                    }
                     localStorage.removeItem('playerName');
                     localStorage.removeItem('playerId');
                     playerName = null;
                     playerId = null;
                     playerPasswordInput.value = "";
+                    isAdmin = false;
                     setupUI();
                     updateHighScoreDisplays();
+                });
+
+                adminPanelButton.addEventListener('click', () => {
+                    allPlayersList.innerHTML = '<li>Carregando...</li>';
+                    adminPanel.classList.remove('hidden');
+                    statusRef.on('value', (snapshot) => {
+                        allPlayersList.innerHTML = '';
+                        if (snapshot.exists()) {
+                            let onlineCount = 0;
+                            snapshot.forEach((childSnapshot) => {
+                                const player = childSnapshot.val();
+                                if(player.online) {
+                                    const li = document.createElement('li');
+                                    li.textContent = `${player.name}`;
+                                    allPlayersList.appendChild(li);
+                                    onlineCount++;
+                                }
+                            });
+                            if (onlineCount === 0) {
+                                allPlayersList.innerHTML = '<li>Nenhum jogador online.</li>';
+                            }
+                        } else {
+                            allPlayersList.innerHTML = '<li>Nenhum jogador online.</li>';
+                        }
+                    });
+                });
+
+                closeAdminPanelButton.addEventListener('click', () => {
+                    statusRef.off();
+                    adminPanel.classList.add('hidden');
                 });
 
                 playerNameInput.addEventListener('keypress', (event) => {
@@ -1066,6 +1262,7 @@
 
                 updateHighScoreDisplays();
                 initializeBackgroundAnimation();
+                setupPresence();
             }, 100);
         });
 
