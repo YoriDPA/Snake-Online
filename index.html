@@ -473,7 +473,7 @@
 
         let playerName = localStorage.getItem('playerName') || null;
         let playerId = localStorage.getItem('playerId') || null;
-        let playerColor = '#3fff3f';
+        let playerColor = localStorage.getItem('playerColor') || '#3fff3f';
         let isSoundOn = true;
         let audioReady = false;
         let isAdmin = false;
@@ -483,7 +483,7 @@
         let isShielded = false;
         let shieldTimer = null;
         let particles = [];
-        let musicLoop;
+        let musicSynth, musicLoop;
 
         const synth = new Tone.FMSynth({
             harmonicity: 8,
@@ -517,6 +517,18 @@
             if (audioReady) return;
             await Tone.start();
             audioReady = true;
+            
+            musicSynth = new Tone.Synth({
+                oscillator: { type: 'pulse', width: 0.6 },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.4 }
+            }).toDestination();
+            musicSynth.volume.value = -12;
+
+            const musicPattern = ["C2", "E2", "G2", "B2", "C3", "B2", "G2", "E2"];
+            musicLoop = new Tone.Sequence((time, note) => {
+                musicSynth.triggerAttackRelease(note, "8n", time);
+            }, musicPattern, "8n").start(0);
+            
             console.log("Contexto de áudio desbloqueado e pronto!");
         }
 
@@ -973,10 +985,12 @@
                 clearInterval(powerUpTimer);
                 pauseScreen.classList.remove('hidden');
                 playSound('pause');
+                if (isSoundOn) Tone.Transport.pause();
             } else {
                 pauseScreen.classList.add('hidden');
                 gameInterval = setInterval(gameLoop, speed);
                 powerUpTimer = setInterval(trySpawningPowerUp, POWERUP_SPAWN_INTERVAL);
+                if (isSoundOn) Tone.Transport.start();
             }
         }
         
@@ -1004,6 +1018,7 @@
 
         function runGame() {
             unlockAudio();
+            if (isSoundOn) Tone.Transport.start();
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -1019,6 +1034,7 @@
         }
 
         function stopGame() {
+            if (isSoundOn) Tone.Transport.stop();
             clearInterval(gameInterval);
             clearInterval(powerUpTimer);
             gameInterval = null;
@@ -1204,10 +1220,27 @@
                     icon.classList.toggle('fa-volume-up', isSoundOn);
                     icon.classList.toggle('fa-volume-mute', !isSoundOn);
                     icon.classList.toggle('muted', !isSoundOn);
+                    if (musicSynth) {
+                        musicSynth.volume.value = isSoundOn ? -12 : -Infinity;
+                    }
                 });
 
                 topScoresButton.addEventListener('click', () => {
                     dropdownContent.classList.toggle('show');
+                });
+
+                colorPicker.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('color-dot')) {
+                        playerColor = e.target.dataset.color;
+                        localStorage.setItem('playerColor', playerColor);
+                        document.querySelectorAll('.color-dot').forEach(dot => dot.classList.remove('active'));
+                        e.target.classList.add('active');
+                        
+                        const currentPId = localStorage.getItem('playerId');
+                        if (currentPId) {
+                            database.ref('scores/' + currentPId).update({ color: playerColor });
+                        }
+                    }
                 });
 
                 submitNameButton.addEventListener('click', () => {
@@ -1232,7 +1265,8 @@
                                 newAdminRef.set({
                                     name: ADMIN_USERNAME,
                                     password: hashPassword(password),
-                                    score: 0
+                                    score: 0,
+                                    color: '#3fff3f'
                                 });
                                 adminPlayerId = newAdminRef.key;
                             }
@@ -1254,6 +1288,9 @@
                             if (existingPlayer.password === hashPassword(password)) {
                                 localStorage.setItem('playerId', existingPlayerId);
                                 localStorage.setItem('playerName', formattedName);
+                                playerColor = existingPlayer.color || '#3fff3f';
+                                localStorage.setItem('playerColor', playerColor);
+                                document.querySelector(`.color-dot[data-color="${playerColor}"]`).classList.add('active');
                                 isAdmin = false;
                                 setupUI();
                                 updateHighScoreDisplays();
@@ -1266,7 +1303,8 @@
                             newPlayerRef.set({
                                 name: formattedName,
                                 password: hashPassword(password),
-                                score: 0
+                                score: 0,
+                                color: playerColor
                             });
                             localStorage.setItem('playerId', newPlayerRef.key);
                             localStorage.setItem('playerName', formattedName);
@@ -1285,8 +1323,10 @@
                     }
                     localStorage.removeItem('playerName');
                     localStorage.removeItem('playerId');
+                    localStorage.removeItem('playerColor');
                     playerName = null;
                     playerId = null;
+                    playerColor = '#3fff3f';
                     playerPasswordInput.value = "";
                     isAdmin = false;
                     setupUI();
