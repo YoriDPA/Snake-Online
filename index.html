@@ -15,12 +15,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-    <!-- External Libs (Compat mode for legacy code support) -->
+    <!-- External Libs (Mantidos via CDN para compatibilidade com o código atual) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (CDN para dev rápido, idealmente seria via postcss em produção, mas funciona) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -50,7 +50,9 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0"
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
@@ -58,6 +60,7 @@
 </head>
   <body class="bg-black text-white overflow-hidden select-none touch-none">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <!-- O Vite injetará o script aqui automaticamente -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
