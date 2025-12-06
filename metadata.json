@@ -1,0 +1,7 @@
+{
+  "name": "Snake Online PWA",
+  "description": "Um jogo Snake multiplayer online com estilo Cyberpunk, power-ups e ranking global.",
+  "requestFramePermissions": [
+    "audio"
+  ]
+}
